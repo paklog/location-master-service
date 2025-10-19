@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocationConfigurationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">location-master-service</a> &gt; <a href="index.source.html" class="el_package">com.paklog.wms.location.application.service</a> &gt; <span class="el_source">LocationConfigurationService.java</span></div><h1>LocationConfigurationService.java</h1><pre class="source lang-java linenums">package com.paklog.wms.location.application.service;
+
+import com.paklog.wms.location.domain.aggregate.LocationMaster;
+import com.paklog.wms.location.domain.entity.Capacity;
+import com.paklog.wms.location.domain.entity.Dimensions;
+import com.paklog.wms.location.domain.entity.Restrictions;
+import com.paklog.wms.location.domain.event.*;
+import com.paklog.wms.location.domain.repository.LocationMasterRepository;
+import com.paklog.wms.location.domain.valueobject.LocationStatus;
+import com.paklog.wms.location.domain.valueobject.LocationType;
+import com.paklog.wms.location.domain.valueobject.SlottingClass;
+import com.paklog.wms.location.infrastructure.events.LocationEventPublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Application service for location configuration management
+ * Orchestrates location creation, update, and lifecycle operations
+ */
+@Service
+@Transactional
+public class LocationConfigurationService {
+
+<span class="fc" id="L29">    private static final Logger logger = LoggerFactory.getLogger(LocationConfigurationService.class);</span>
+
+    private final LocationMasterRepository locationRepository;
+    private final LocationEventPublisher eventPublisher;
+
+    public LocationConfigurationService(
+            LocationMasterRepository locationRepository,
+            LocationEventPublisher eventPublisher
+<span class="fc" id="L37">    ) {</span>
+<span class="fc" id="L38">        this.locationRepository = locationRepository;</span>
+<span class="fc" id="L39">        this.eventPublisher = eventPublisher;</span>
+<span class="fc" id="L40">    }</span>
+
+    /**
+     * Create a new location
+     */
+    public LocationMaster createLocation(
+            String locationId,
+            String warehouseId,
+            String locationName,
+            LocationType type,
+            String parentLocationId,
+            Integer hierarchyLevel,
+            String zone,
+            String createdBy
+    ) {
+<span class="fc" id="L55">        logger.info(&quot;Creating location: {} ({}) in warehouse {}&quot;, locationId, locationName, warehouseId);</span>
+
+        // Validate parent exists if specified
+<span class="pc bpc" id="L58" title="1 of 2 branches missed.">        if (parentLocationId != null) {</span>
+<span class="fc" id="L59">            LocationMaster parent = locationRepository.findById(parentLocationId)</span>
+<span class="pc" id="L60">                .orElseThrow(() -&gt; new IllegalArgumentException(</span>
+                    &quot;Parent location not found: &quot; + parentLocationId));
+
+<span class="fc bfc" id="L63" title="All 2 branches covered.">            if (!parent.canHaveChildren()) {</span>
+<span class="fc" id="L64">                throw new IllegalArgumentException(</span>
+<span class="fc" id="L65">                    &quot;Parent location type &quot; + parent.getType() + &quot; cannot have children&quot;);</span>
+            }
+        }
+
+        // Create location
+<span class="fc" id="L70">        LocationMaster location = LocationMaster.create(</span>
+            locationId, warehouseId, locationName, type,
+            parentLocationId, hierarchyLevel, zone
+        );
+<span class="fc" id="L74">        location.setCreatedBy(createdBy);</span>
+<span class="fc" id="L75">        location.validateHierarchy();</span>
+
+        // Save
+<span class="fc" id="L78">        location = locationRepository.save(location);</span>
+
+        // Publish event
+<span class="fc" id="L81">        LocationCreatedEvent event = LocationCreatedEvent.of(</span>
+            locationId, warehouseId, locationName, type,
+            parentLocationId, hierarchyLevel, zone, createdBy
+        );
+<span class="fc" id="L85">        eventPublisher.publishLocationCreated(event);</span>
+
+<span class="fc" id="L87">        logger.info(&quot;Location created: {}&quot;, locationId);</span>
+<span class="fc" id="L88">        return location;</span>
+    }
+
+    /**
+     * Configure location dimensions
+     */
+    public LocationMaster configureDimensions(
+            String locationId,
+            Dimensions dimensions,
+            String updatedBy
+    ) {
+<span class="nc" id="L99">        logger.info(&quot;Configuring dimensions for location: {}&quot;, locationId);</span>
+
+<span class="nc" id="L101">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="nc" id="L102">        location.configureDimensions(dimensions);</span>
+<span class="nc" id="L103">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="nc" id="L105">        return locationRepository.save(location);</span>
+    }
+
+    /**
+     * Configure location capacity
+     */
+    public LocationMaster configureCapacity(
+            String locationId,
+            Capacity capacity,
+            String updatedBy,
+            String reason
+    ) {
+<span class="fc" id="L117">        logger.info(&quot;Configuring capacity for location: {}&quot;, locationId);</span>
+
+<span class="fc" id="L119">        LocationMaster location = getLocationOrThrow(locationId);</span>
+
+        // Store previous values for event
+<span class="fc bfc" id="L122" title="All 2 branches covered.">        Integer previousMaxQty = location.getCapacity() != null ?</span>
+<span class="fc" id="L123">            location.getCapacity().getMaxQuantity() : null;</span>
+
+<span class="fc" id="L125">        location.configureCapacity(capacity);</span>
+<span class="fc" id="L126">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="fc" id="L128">        location = locationRepository.save(location);</span>
+
+        // Publish event if capacity changed
+<span class="pc bpc" id="L131" title="1 of 4 branches missed.">        if (previousMaxQty != null &amp;&amp; !previousMaxQty.equals(capacity.getMaxQuantity())) {</span>
+<span class="fc" id="L132">            LocationCapacityChangedEvent event = LocationCapacityChangedEvent.of(</span>
+                locationId,
+<span class="fc" id="L134">                location.getWarehouseId(),</span>
+                previousMaxQty,
+<span class="fc" id="L136">                capacity.getMaxQuantity(),</span>
+<span class="fc" id="L137">                null, capacity.getMaxWeight(),</span>
+<span class="fc" id="L138">                null, capacity.getMaxVolume(),</span>
+                updatedBy,
+                reason
+            );
+<span class="fc" id="L142">            eventPublisher.publishLocationCapacityChanged(event);</span>
+        }
+
+<span class="fc" id="L145">        return location;</span>
+    }
+
+    /**
+     * Configure location restrictions
+     */
+    public LocationMaster configureRestrictions(
+            String locationId,
+            Restrictions restrictions,
+            String updatedBy
+    ) {
+<span class="fc" id="L156">        logger.info(&quot;Configuring restrictions for location: {}&quot;, locationId);</span>
+
+<span class="nc" id="L158">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="nc" id="L159">        location.configureRestrictions(restrictions);</span>
+<span class="nc" id="L160">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="nc" id="L162">        return locationRepository.save(location);</span>
+    }
+
+    /**
+     * Update slotting classification
+     */
+    public LocationMaster updateSlottingClass(
+            String locationId,
+            SlottingClass slottingClass,
+            String updatedBy,
+            String reason
+    ) {
+<span class="fc" id="L174">        logger.info(&quot;Updating slotting class for location {} to {}&quot;, locationId, slottingClass);</span>
+
+<span class="fc" id="L176">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="fc" id="L177">        SlottingClass previousClass = location.getSlottingClass();</span>
+
+<span class="fc" id="L179">        location.setSlottingClass(slottingClass);</span>
+<span class="fc" id="L180">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="fc" id="L182">        location = locationRepository.save(location);</span>
+
+        // Publish event
+<span class="fc" id="L185">        LocationSlottingChangedEvent event = LocationSlottingChangedEvent.of(</span>
+            locationId,
+<span class="fc" id="L187">            location.getWarehouseId(),</span>
+<span class="fc" id="L188">            location.getZone(),</span>
+            previousClass,
+            slottingClass,
+<span class="fc" id="L191">            location.getPickPathSequence(),</span>
+            updatedBy,
+            reason
+        );
+<span class="fc" id="L195">        eventPublisher.publishLocationSlottingChanged(event);</span>
+
+<span class="fc" id="L197">        return location;</span>
+    }
+
+    /**
+     * Activate location
+     */
+    public LocationMaster activateLocation(String locationId, String updatedBy) {
+<span class="fc" id="L204">        logger.info(&quot;Activating location: {}&quot;, locationId);</span>
+
+<span class="fc" id="L206">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="fc" id="L207">        LocationStatus previousStatus = location.getStatus();</span>
+
+<span class="fc" id="L209">        location.activate();</span>
+<span class="fc" id="L210">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="fc" id="L212">        location = locationRepository.save(location);</span>
+
+        // Publish event
+<span class="fc" id="L215">        publishStatusChangeEvent(location, previousStatus, &quot;Location activated&quot;, updatedBy);</span>
+
+<span class="fc" id="L217">        return location;</span>
+    }
+
+    /**
+     * Deactivate location
+     */
+    public LocationMaster deactivateLocation(String locationId, String updatedBy) {
+<span class="nc" id="L224">        logger.info(&quot;Deactivating location: {}&quot;, locationId);</span>
+
+<span class="nc" id="L226">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="nc" id="L227">        LocationStatus previousStatus = location.getStatus();</span>
+
+<span class="nc" id="L229">        location.deactivate();</span>
+<span class="nc" id="L230">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="nc" id="L232">        location = locationRepository.save(location);</span>
+
+<span class="nc" id="L234">        publishStatusChangeEvent(location, previousStatus, &quot;Location deactivated&quot;, updatedBy);</span>
+
+<span class="nc" id="L236">        return location;</span>
+    }
+
+    /**
+     * Block location
+     */
+    public LocationMaster blockLocation(String locationId, String reason, String updatedBy) {
+<span class="fc" id="L243">        logger.info(&quot;Blocking location {}: {}&quot;, locationId, reason);</span>
+
+<span class="fc" id="L245">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="fc" id="L246">        LocationStatus previousStatus = location.getStatus();</span>
+
+<span class="fc" id="L248">        location.block(reason);</span>
+<span class="fc" id="L249">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="fc" id="L251">        location = locationRepository.save(location);</span>
+
+<span class="fc" id="L253">        publishStatusChangeEvent(location, previousStatus, &quot;Location blocked: &quot; + reason, updatedBy);</span>
+
+<span class="fc" id="L255">        return location;</span>
+    }
+
+    /**
+     * Unblock location
+     */
+    public LocationMaster unblockLocation(String locationId, String updatedBy) {
+<span class="nc" id="L262">        logger.info(&quot;Unblocking location: {}&quot;, locationId);</span>
+
+<span class="nc" id="L264">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="nc" id="L265">        LocationStatus previousStatus = location.getStatus();</span>
+
+<span class="nc" id="L267">        location.unblock();</span>
+<span class="nc" id="L268">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="nc" id="L270">        location = locationRepository.save(location);</span>
+
+<span class="nc" id="L272">        publishStatusChangeEvent(location, previousStatus, &quot;Location unblocked&quot;, updatedBy);</span>
+
+<span class="nc" id="L274">        return location;</span>
+    }
+
+    /**
+     * Reserve location
+     */
+    public LocationMaster reserveLocation(String locationId, String purpose, String updatedBy) {
+<span class="fc" id="L281">        logger.info(&quot;Reserving location {}: {}&quot;, locationId, purpose);</span>
+
+<span class="fc" id="L283">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="fc" id="L284">        LocationStatus previousStatus = location.getStatus();</span>
+
+<span class="fc" id="L286">        location.reserve(purpose);</span>
+<span class="fc" id="L287">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="fc" id="L289">        location = locationRepository.save(location);</span>
+
+<span class="fc" id="L291">        publishStatusChangeEvent(location, previousStatus, &quot;Location reserved: &quot; + purpose, updatedBy);</span>
+
+<span class="fc" id="L293">        return location;</span>
+    }
+
+    /**
+     * Release reservation
+     */
+    public LocationMaster releaseReservation(String locationId, String updatedBy) {
+<span class="nc" id="L300">        logger.info(&quot;Releasing reservation for location: {}&quot;, locationId);</span>
+
+<span class="nc" id="L302">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="nc" id="L303">        LocationStatus previousStatus = location.getStatus();</span>
+
+<span class="nc" id="L305">        location.releaseReservation();</span>
+<span class="nc" id="L306">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="nc" id="L308">        location = locationRepository.save(location);</span>
+
+<span class="nc" id="L310">        publishStatusChangeEvent(location, previousStatus, &quot;Reservation released&quot;, updatedBy);</span>
+
+<span class="nc" id="L312">        return location;</span>
+    }
+
+    /**
+     * Decommission location
+     */
+    public LocationMaster decommissionLocation(String locationId, String reason, String updatedBy) {
+<span class="fc" id="L319">        logger.info(&quot;Decommissioning location {}: {}&quot;, locationId, reason);</span>
+
+<span class="fc" id="L321">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="fc" id="L322">        LocationStatus previousStatus = location.getStatus();</span>
+
+<span class="fc" id="L324">        location.decommission(reason);</span>
+<span class="fc" id="L325">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="fc" id="L327">        location = locationRepository.save(location);</span>
+
+<span class="fc" id="L329">        publishStatusChangeEvent(location, previousStatus, &quot;Location decommissioned: &quot; + reason, updatedBy);</span>
+
+<span class="fc" id="L331">        return location;</span>
+    }
+
+    /**
+     * Set pick path sequence
+     */
+    public LocationMaster setPickPathSequence(String locationId, Integer sequence, String updatedBy) {
+<span class="fc" id="L338">        logger.info(&quot;Setting pick path sequence for location {} to {}&quot;, locationId, sequence);</span>
+
+<span class="fc" id="L340">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="fc" id="L341">        location.setPickPathSequence(sequence);</span>
+<span class="fc" id="L342">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="fc" id="L344">        return locationRepository.save(location);</span>
+    }
+
+    /**
+     * Set location coordinates
+     */
+    public LocationMaster setCoordinates(
+            String locationId,
+            Double x, Double y, Double z,
+            String updatedBy
+    ) {
+<span class="nc" id="L355">        LocationMaster location = getLocationOrThrow(locationId);</span>
+<span class="nc" id="L356">        location.setCoordinates(x, y, z);</span>
+<span class="nc" id="L357">        location.setUpdatedBy(updatedBy);</span>
+
+<span class="nc" id="L359">        return locationRepository.save(location);</span>
+    }
+
+    /**
+     * Get location by ID
+     */
+    @Transactional(readOnly = true)
+    public Optional&lt;LocationMaster&gt; getLocation(String locationId) {
+<span class="fc" id="L367">        return locationRepository.findById(locationId);</span>
+    }
+
+    /**
+     * Get locations by warehouse
+     */
+    @Transactional(readOnly = true)
+    public List&lt;LocationMaster&gt; getLocationsByWarehouse(String warehouseId) {
+<span class="fc" id="L375">        return locationRepository.findByWarehouseId(warehouseId);</span>
+    }
+
+    /**
+     * Get active storage locations
+     */
+    @Transactional(readOnly = true)
+    public List&lt;LocationMaster&gt; getActiveStorageLocations(String warehouseId) {
+<span class="fc" id="L383">        return locationRepository.findActiveStorageLocations(warehouseId);</span>
+    }
+
+    /**
+     * Get locations in pick path order
+     */
+    @Transactional(readOnly = true)
+    public List&lt;LocationMaster&gt; getPickPathLocations(String warehouseId, String zone) {
+<span class="fc" id="L391">        return locationRepository.findPickPathLocations(warehouseId, zone);</span>
+    }
+
+    /**
+     * Get locations requiring attention
+     */
+    @Transactional(readOnly = true)
+    public List&lt;LocationMaster&gt; getLocationsRequiringAttention(String warehouseId) {
+<span class="fc" id="L399">        return locationRepository.findLocationsRequiringAttention(warehouseId);</span>
+    }
+
+    /**
+     * Get child locations
+     */
+    @Transactional(readOnly = true)
+    public List&lt;LocationMaster&gt; getChildLocations(String parentLocationId) {
+<span class="nc" id="L407">        return locationRepository.findByParentLocationId(parentLocationId);</span>
+    }
+
+    private LocationMaster getLocationOrThrow(String locationId) {
+<span class="fc" id="L411">        return locationRepository.findById(locationId)</span>
+<span class="fc" id="L412">            .orElseThrow(() -&gt; new IllegalArgumentException(&quot;Location not found: &quot; + locationId));</span>
+    }
+
+    private void publishStatusChangeEvent(
+            LocationMaster location,
+            LocationStatus previousStatus,
+            String reason,
+            String updatedBy
+    ) {
+<span class="pc bpc" id="L421" title="1 of 2 branches missed.">        if (previousStatus != location.getStatus()) {</span>
+<span class="fc" id="L422">            LocationStatusChangedEvent event = LocationStatusChangedEvent.of(</span>
+<span class="fc" id="L423">                location.getLocationId(),</span>
+<span class="fc" id="L424">                location.getWarehouseId(),</span>
+                previousStatus,
+<span class="fc" id="L426">                location.getStatus(),</span>
+                reason,
+                updatedBy
+            );
+<span class="fc" id="L430">            eventPublisher.publishLocationStatusChanged(event);</span>
+        }
+<span class="fc" id="L432">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

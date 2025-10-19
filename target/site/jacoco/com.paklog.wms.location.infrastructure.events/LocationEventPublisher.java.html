@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocationEventPublisher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">location-master-service</a> &gt; <a href="index.source.html" class="el_package">com.paklog.wms.location.infrastructure.events</a> &gt; <span class="el_source">LocationEventPublisher.java</span></div><h1>LocationEventPublisher.java</h1><pre class="source lang-java linenums">package com.paklog.wms.location.infrastructure.events;
+
+import com.paklog.wms.location.domain.event.*;
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.builder.CloudEventBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
+
+import java.net.URI;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+/**
+ * Publishes location domain events as CloudEvents to Kafka
+ */
+@Component
+public class LocationEventPublisher {
+
+<span class="fc" id="L22">    private static final Logger logger = LoggerFactory.getLogger(LocationEventPublisher.class);</span>
+
+    private final KafkaTemplate&lt;String, Object&gt; kafkaTemplate;
+    private final String topic;
+    private final String source;
+
+    public LocationEventPublisher(
+            KafkaTemplate&lt;String, Object&gt; kafkaTemplate,
+            @Value(&quot;${cloudevents.kafka.topic}&quot;) String topic,
+            @Value(&quot;${cloudevents.kafka.source}&quot;) String source
+<span class="fc" id="L32">    ) {</span>
+<span class="fc" id="L33">        this.kafkaTemplate = kafkaTemplate;</span>
+<span class="fc" id="L34">        this.topic = topic;</span>
+<span class="fc" id="L35">        this.source = source;</span>
+<span class="fc" id="L36">    }</span>
+
+    /**
+     * Publish LocationCreatedEvent
+     */
+    public void publishLocationCreated(LocationCreatedEvent event) {
+<span class="fc" id="L42">        CloudEvent cloudEvent = CloudEventBuilder.v1()</span>
+<span class="fc" id="L43">            .withId(UUID.randomUUID().toString())</span>
+<span class="fc" id="L44">            .withSource(URI.create(source))</span>
+<span class="fc" id="L45">            .withType(&quot;com.paklog.wms.location.created.v1&quot;)</span>
+<span class="fc" id="L46">            .withSubject(event.locationId())</span>
+<span class="fc" id="L47">            .withTime(OffsetDateTime.now())</span>
+<span class="fc" id="L48">            .withData(&quot;application/json&quot;, serializeEvent(event))</span>
+<span class="fc" id="L49">            .withExtension(&quot;warehouseid&quot;, event.warehouseId())</span>
+<span class="fc" id="L50">            .withExtension(&quot;locationtype&quot;, event.type().name())</span>
+<span class="fc" id="L51">            .build();</span>
+
+<span class="fc" id="L53">        publishEvent(cloudEvent, event.locationId());</span>
+<span class="fc" id="L54">    }</span>
+
+    /**
+     * Publish LocationCapacityChangedEvent
+     */
+    public void publishLocationCapacityChanged(LocationCapacityChangedEvent event) {
+<span class="fc" id="L60">        CloudEvent cloudEvent = CloudEventBuilder.v1()</span>
+<span class="fc" id="L61">            .withId(UUID.randomUUID().toString())</span>
+<span class="fc" id="L62">            .withSource(URI.create(source))</span>
+<span class="fc" id="L63">            .withType(&quot;com.paklog.wms.location.capacity-changed.v1&quot;)</span>
+<span class="fc" id="L64">            .withSubject(event.locationId())</span>
+<span class="fc" id="L65">            .withTime(OffsetDateTime.now())</span>
+<span class="fc" id="L66">            .withData(&quot;application/json&quot;, serializeEvent(event))</span>
+<span class="fc" id="L67">            .withExtension(&quot;warehouseid&quot;, event.warehouseId())</span>
+<span class="fc" id="L68">            .build();</span>
+
+<span class="fc" id="L70">        publishEvent(cloudEvent, event.locationId());</span>
+<span class="fc" id="L71">    }</span>
+
+    /**
+     * Publish LocationSlottingChangedEvent
+     */
+    public void publishLocationSlottingChanged(LocationSlottingChangedEvent event) {
+<span class="fc" id="L77">        CloudEvent cloudEvent = CloudEventBuilder.v1()</span>
+<span class="fc" id="L78">            .withId(UUID.randomUUID().toString())</span>
+<span class="fc" id="L79">            .withSource(URI.create(source))</span>
+<span class="fc" id="L80">            .withType(&quot;com.paklog.wms.location.slotting-changed.v1&quot;)</span>
+<span class="fc" id="L81">            .withSubject(event.locationId())</span>
+<span class="fc" id="L82">            .withTime(OffsetDateTime.now())</span>
+<span class="fc" id="L83">            .withData(&quot;application/json&quot;, serializeEvent(event))</span>
+<span class="fc" id="L84">            .withExtension(&quot;warehouseid&quot;, event.warehouseId())</span>
+<span class="fc" id="L85">            .withExtension(&quot;zone&quot;, event.zone())</span>
+<span class="fc" id="L86">            .withExtension(&quot;slottingclass&quot;, event.newClass().name())</span>
+<span class="fc" id="L87">            .build();</span>
+
+<span class="fc" id="L89">        publishEvent(cloudEvent, event.locationId());</span>
+<span class="fc" id="L90">    }</span>
+
+    /**
+     * Publish LocationStatusChangedEvent
+     */
+    public void publishLocationStatusChanged(LocationStatusChangedEvent event) {
+<span class="fc" id="L96">        CloudEvent cloudEvent = CloudEventBuilder.v1()</span>
+<span class="fc" id="L97">            .withId(UUID.randomUUID().toString())</span>
+<span class="fc" id="L98">            .withSource(URI.create(source))</span>
+<span class="fc" id="L99">            .withType(&quot;com.paklog.wms.location.status-changed.v1&quot;)</span>
+<span class="fc" id="L100">            .withSubject(event.locationId())</span>
+<span class="fc" id="L101">            .withTime(OffsetDateTime.now())</span>
+<span class="fc" id="L102">            .withData(&quot;application/json&quot;, serializeEvent(event))</span>
+<span class="fc" id="L103">            .withExtension(&quot;warehouseid&quot;, event.warehouseId())</span>
+<span class="fc" id="L104">            .withExtension(&quot;newstatus&quot;, event.newStatus().name())</span>
+<span class="fc" id="L105">            .build();</span>
+
+<span class="fc" id="L107">        publishEvent(cloudEvent, event.locationId());</span>
+<span class="fc" id="L108">    }</span>
+
+    private void publishEvent(CloudEvent cloudEvent, String key) {
+        try {
+<span class="fc" id="L112">            kafkaTemplate.send(topic, key, cloudEvent)</span>
+<span class="fc" id="L113">                .whenComplete((result, ex) -&gt; {</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">                    if (ex != null) {</span>
+<span class="nc" id="L115">                        logger.error(&quot;Failed to publish event {} for key {}&quot;,</span>
+<span class="nc" id="L116">                            cloudEvent.getType(), key, ex);</span>
+                    } else {
+<span class="fc" id="L118">                        logger.debug(&quot;Published event {} for key {}&quot;,</span>
+<span class="fc" id="L119">                            cloudEvent.getType(), key);</span>
+                    }
+<span class="fc" id="L121">                });</span>
+<span class="fc" id="L122">        } catch (Exception e) {</span>
+<span class="fc" id="L123">            logger.error(&quot;Error publishing event {} for key {}&quot;,</span>
+<span class="fc" id="L124">                cloudEvent.getType(), key, e);</span>
+<span class="fc" id="L125">        }</span>
+<span class="fc" id="L126">    }</span>
+
+    private byte[] serializeEvent(Object event) {
+        try {
+            // Simple JSON serialization
+<span class="pc" id="L131">            return com.fasterxml.jackson.databind.ObjectMapper.class</span>
+<span class="fc" id="L132">                .getDeclaredConstructor()</span>
+<span class="fc" id="L133">                .newInstance()</span>
+<span class="nc" id="L134">                .writeValueAsBytes(event);</span>
+<span class="fc" id="L135">        } catch (Exception e) {</span>
+<span class="fc" id="L136">            logger.error(&quot;Failed to serialize event&quot;, e);</span>
+<span class="fc" id="L137">            return new byte[0];</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

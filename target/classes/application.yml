@@ -1,0 +1,103 @@
+spring:
+  application:
+    name: location-master-service
+
+  # PostgreSQL Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/location_master}
+    username: ${DATABASE_USERNAME:paklog}
+    password: ${DATABASE_PASSWORD:paklog}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: location-master-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
+  # Spring MVC Configuration
+  mvc:
+    contentnegotiation:
+      favor-parameter: false
+      favor-path-extension: false
+      media-types:
+        json: application/json
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.paklog.wms.location: DEBUG
+    org.springframework.kafka: WARN
+    org.hibernate.SQL: WARN
+
+# Application-specific Configuration
+location:
+  slotting:
+    enabled: true
+    auto-optimize: false
+  hierarchy:
+    max-depth: 6
+
+# CloudEvents Configuration
+cloudevents:
+  kafka:
+    topic: wms-location-events
+    source: /wms/location-master-service
+
+# Actuator Endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    db:
+      enabled: true
+    kafka:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: dev
+      service-type: wms
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces
+
+# OpenAPI Documentation Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha

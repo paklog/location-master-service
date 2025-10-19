@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SlottingService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">location-master-service</a> &gt; <a href="index.source.html" class="el_package">com.paklog.wms.location.application.service</a> &gt; <span class="el_source">SlottingService.java</span></div><h1>SlottingService.java</h1><pre class="source lang-java linenums">package com.paklog.wms.location.application.service;
+
+import com.paklog.wms.location.domain.aggregate.LocationMaster;
+import com.paklog.wms.location.domain.repository.LocationMasterRepository;
+import com.paklog.wms.location.domain.valueobject.LocationStatus;
+import com.paklog.wms.location.domain.valueobject.SlottingClass;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * Slotting Optimization Service
+ * Provides algorithms for optimal product-to-location assignment
+ * based on velocity, dimensions, and warehouse layout
+ */
+@Service
+@Transactional(readOnly = true)
+public class SlottingService {
+
+<span class="fc" id="L24">    private static final Logger logger = LoggerFactory.getLogger(SlottingService.class);</span>
+
+    private final LocationMasterRepository locationRepository;
+    private final LocationConfigurationService configService;
+
+    public SlottingService(
+            LocationMasterRepository locationRepository,
+            LocationConfigurationService configService
+<span class="fc" id="L32">    ) {</span>
+<span class="fc" id="L33">        this.locationRepository = locationRepository;</span>
+<span class="fc" id="L34">        this.configService = configService;</span>
+<span class="fc" id="L35">    }</span>
+
+    /**
+     * Find optimal location for a product based on slotting class
+     *
+     * @param warehouseId Warehouse ID
+     * @param zone Zone to search
+     * @param targetClass Slotting class (A, B, C, etc.)
+     * @param requiredQuantity Required capacity
+     * @return Optimal location or empty if none found
+     */
+    public Optional&lt;LocationMaster&gt; findOptimalLocation(
+            String warehouseId,
+            String zone,
+            SlottingClass targetClass,
+            int requiredQuantity
+    ) {
+<span class="fc" id="L52">        logger.debug(&quot;Finding optimal location for class {} in warehouse {} zone {}&quot;,</span>
+            targetClass, warehouseId, zone);
+
+<span class="fc" id="L55">        List&lt;LocationMaster&gt; candidates = locationRepository</span>
+<span class="fc" id="L56">            .findOptimalSlottingLocations(warehouseId, zone, targetClass);</span>
+
+<span class="fc" id="L58">        return candidates.stream()</span>
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">            .filter(loc -&gt; loc.getCapacity() != null &amp;&amp;</span>
+<span class="fc bfc" id="L60" title="All 2 branches covered.">                          loc.getCapacity().getAvailableQuantity() &gt;= requiredQuantity)</span>
+<span class="fc" id="L61">            .findFirst();</span>
+    }
+
+    /**
+     * Optimize slotting for entire warehouse zone
+     * Reassigns slotting classes based on distance from dock
+     *
+     * @param warehouseId Warehouse ID
+     * @param zone Zone to optimize
+     * @param updatedBy User performing optimization
+     * @return Number of locations updated
+     */
+    @Transactional
+    public int optimizeZoneSlotting(String warehouseId, String zone, String updatedBy) {
+<span class="fc" id="L75">        logger.info(&quot;Optimizing slotting for warehouse {} zone {}&quot;, warehouseId, zone);</span>
+
+<span class="fc" id="L77">        List&lt;LocationMaster&gt; locations = locationRepository</span>
+<span class="fc" id="L78">            .findByWarehouseIdAndZoneAndStatus(warehouseId, zone, LocationStatus.ACTIVE);</span>
+
+<span class="fc" id="L80">        int updated = 0;</span>
+
+<span class="fc bfc" id="L82" title="All 2 branches covered.">        for (LocationMaster location : locations) {</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">            if (location.getType().canStoreInventory() &amp;&amp;</span>
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">                location.getDistanceFromDock() != null) {</span>
+
+<span class="fc" id="L86">                SlottingClass optimalClass = determineOptimalSlottingClass(</span>
+<span class="fc" id="L87">                    location.getDistanceFromDock()</span>
+                );
+
+<span class="fc bfc" id="L90" title="All 2 branches covered.">                if (optimalClass != location.getSlottingClass()) {</span>
+<span class="fc" id="L91">                    configService.updateSlottingClass(</span>
+<span class="fc" id="L92">                        location.getLocationId(),</span>
+                        optimalClass,
+                        updatedBy,
+                        &quot;Automatic slotting optimization&quot;
+                    );
+<span class="fc" id="L97">                    updated++;</span>
+                }
+            }
+<span class="fc" id="L100">        }</span>
+
+<span class="fc" id="L102">        logger.info(&quot;Updated {} locations in zone {}&quot;, updated, zone);</span>
+<span class="fc" id="L103">        return updated;</span>
+    }
+
+    /**
+     * Get slotting recommendations for a warehouse
+     *
+     * @param warehouseId Warehouse ID
+     * @return Map of location ID to recommended slotting class
+     */
+    public Map&lt;String, SlottingRecommendation&gt; getSlottingRecommendations(String warehouseId) {
+<span class="fc" id="L113">        logger.info(&quot;Generating slotting recommendations for warehouse {}&quot;, warehouseId);</span>
+
+<span class="fc" id="L115">        List&lt;LocationMaster&gt; locations = locationRepository.findActiveStorageLocations(warehouseId);</span>
+
+<span class="fc" id="L117">        return locations.stream()</span>
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">            .filter(loc -&gt; loc.getDistanceFromDock() != null)</span>
+<span class="fc" id="L119">            .collect(Collectors.toMap(</span>
+                LocationMaster::getLocationId,
+                this::generateRecommendation
+            ));
+    }
+
+    /**
+     * Calculate golden zone (optimal picking area) locations
+     * Golden zone = locations closest to dock with best accessibility
+     *
+     * @param warehouseId Warehouse ID
+     * @param zone Zone to analyze
+     * @return List of golden zone locations
+     */
+    public List&lt;LocationMaster&gt; identifyGoldenZone(String warehouseId, String zone) {
+<span class="fc" id="L134">        logger.debug(&quot;Identifying golden zone for warehouse {} zone {}&quot;, warehouseId, zone);</span>
+
+<span class="fc" id="L136">        List&lt;LocationMaster&gt; candidates = locationRepository</span>
+<span class="fc" id="L137">            .findByWarehouseIdAndZoneAndStatus(warehouseId, zone, LocationStatus.ACTIVE);</span>
+
+        // Sort by distance from dock (ascending) and pick path sequence
+<span class="fc" id="L140">        return candidates.stream()</span>
+<span class="fc" id="L141">            .filter(loc -&gt; loc.getType().canStoreInventory())</span>
+<span class="pc bpc" id="L142" title="1 of 2 branches missed.">            .filter(loc -&gt; loc.getDistanceFromDock() != null)</span>
+<span class="fc" id="L143">            .sorted(Comparator.comparing(LocationMaster::getDistanceFromDock)</span>
+<span class="pc bnc" id="L144" title="All 2 branches missed.">                .thenComparing(loc -&gt; loc.getPickPathSequence() != null ?</span>
+<span class="nc" id="L145">                    loc.getPickPathSequence() : Integer.MAX_VALUE))</span>
+<span class="fc" id="L146">            .limit(calculateGoldenZoneSize(candidates.size()))</span>
+<span class="fc" id="L147">            .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * Balance slotting across zones
+     * Ensures even distribution of velocity classes
+     *
+     * @param warehouseId Warehouse ID
+     * @return Rebalancing report
+     */
+    @Transactional
+    public SlottingBalanceReport balanceSlotting(String warehouseId, String updatedBy) {
+<span class="fc" id="L159">        logger.info(&quot;Balancing slotting for warehouse {}&quot;, warehouseId);</span>
+
+<span class="fc" id="L161">        List&lt;LocationMaster&gt; zones = locationRepository.findZones(warehouseId);</span>
+<span class="fc" id="L162">        Map&lt;String, SlottingDistribution&gt; distributionByZone = new HashMap&lt;&gt;();</span>
+
+<span class="fc bfc" id="L164" title="All 2 branches covered.">        for (LocationMaster zone : zones) {</span>
+<span class="fc" id="L165">            List&lt;LocationMaster&gt; zoneLocations = locationRepository</span>
+<span class="fc" id="L166">                .findByWarehouseIdAndZone(warehouseId, zone.getZone());</span>
+
+<span class="fc" id="L168">            SlottingDistribution distribution = calculateSlottingDistribution(zoneLocations);</span>
+<span class="fc" id="L169">            distributionByZone.put(zone.getZone(), distribution);</span>
+<span class="fc" id="L170">        }</span>
+
+        // Identify zones that need rebalancing
+<span class="fc" id="L173">        int rebalanced = 0;</span>
+<span class="fc bfc" id="L174" title="All 2 branches covered.">        for (Map.Entry&lt;String, SlottingDistribution&gt; entry : distributionByZone.entrySet()) {</span>
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">            if (entry.getValue().needsRebalancing()) {</span>
+<span class="fc" id="L176">                int updated = optimizeZoneSlotting(warehouseId, entry.getKey(), updatedBy);</span>
+<span class="fc" id="L177">                rebalanced += updated;</span>
+            }
+<span class="fc" id="L179">        }</span>
+
+<span class="fc" id="L181">        return new SlottingBalanceReport(warehouseId, distributionByZone, rebalanced);</span>
+    }
+
+    /**
+     * Get pick path optimization for zone
+     * Calculates optimal sequence based on slotting class and location
+     *
+     * @param warehouseId Warehouse ID
+     * @param zone Zone to optimize
+     * @return Ordered list of locations in optimal pick path
+     */
+    public List&lt;LocationMaster&gt; getOptimizedPickPath(String warehouseId, String zone) {
+<span class="fc" id="L193">        List&lt;LocationMaster&gt; locations = locationRepository.findPickPathLocations(warehouseId, zone);</span>
+
+        // Sort by slotting class priority, then distance, then physical location
+<span class="fc" id="L196">        return locations.stream()</span>
+<span class="fc" id="L197">            .sorted(Comparator</span>
+<span class="fc" id="L198">                .comparing((LocationMaster loc) -&gt; loc.getSlottingClass().getPickPathPriority())</span>
+<span class="pc bnc" id="L199" title="All 2 branches missed.">                .thenComparing(loc -&gt; loc.getDistanceFromDock() != null ?</span>
+<span class="nc" id="L200">                    loc.getDistanceFromDock() : Integer.MAX_VALUE)</span>
+<span class="pc bnc" id="L201" title="All 2 branches missed.">                .thenComparing(loc -&gt; loc.getAisle() != null ? loc.getAisle() : &quot;&quot;)</span>
+<span class="pc bnc" id="L202" title="All 2 branches missed.">                .thenComparing(loc -&gt; loc.getBay() != null ? loc.getBay() : &quot;&quot;)</span>
+<span class="pc bnc" id="L203" title="All 2 branches missed.">                .thenComparing(loc -&gt; loc.getLevel() != null ? loc.getLevel() : &quot;&quot;))</span>
+<span class="fc" id="L204">            .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * Determine optimal slotting class based on distance from dock
+     */
+    private SlottingClass determineOptimalSlottingClass(int distanceFromDock) {
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        if (distanceFromDock &lt;= 20) {</span>
+<span class="fc" id="L212">            return SlottingClass.FAST_MOVER;</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">        } else if (distanceFromDock &lt;= 50) {</span>
+<span class="fc" id="L214">            return SlottingClass.A;</span>
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        } else if (distanceFromDock &lt;= 100) {</span>
+<span class="fc" id="L216">            return SlottingClass.B;</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        } else if (distanceFromDock &lt;= 200) {</span>
+<span class="nc" id="L218">            return SlottingClass.C;</span>
+        } else {
+<span class="nc" id="L220">            return SlottingClass.SLOW_MOVER;</span>
+        }
+    }
+
+    /**
+     * Generate slotting recommendation for a location
+     */
+    private SlottingRecommendation generateRecommendation(LocationMaster location) {
+<span class="pc bpc" id="L228" title="1 of 2 branches missed.">        if (location.getDistanceFromDock() == null) {</span>
+<span class="nc" id="L229">            return new SlottingRecommendation(</span>
+<span class="nc" id="L230">                location.getLocationId(),</span>
+<span class="nc" id="L231">                location.getSlottingClass(),</span>
+<span class="nc" id="L232">                location.getSlottingClass(),</span>
+                0,
+                &quot;Distance from dock not set&quot;
+            );
+        }
+
+<span class="fc" id="L238">        SlottingClass recommendedClass = determineOptimalSlottingClass(</span>
+<span class="fc" id="L239">            location.getDistanceFromDock()</span>
+        );
+
+<span class="fc" id="L242">        int confidenceScore = calculateConfidenceScore(location, recommendedClass);</span>
+
+<span class="fc" id="L244">        String reasoning = String.format(</span>
+            &quot;Location is %d units from dock. Recommended %s (current: %s)&quot;,
+<span class="fc" id="L246">            location.getDistanceFromDock(),</span>
+            recommendedClass,
+<span class="fc" id="L248">            location.getSlottingClass()</span>
+        );
+
+<span class="fc" id="L251">        return new SlottingRecommendation(</span>
+<span class="fc" id="L252">            location.getLocationId(),</span>
+<span class="fc" id="L253">            location.getSlottingClass(),</span>
+            recommendedClass,
+            confidenceScore,
+            reasoning
+        );
+    }
+
+    /**
+     * Calculate confidence score for recommendation (0-100)
+     */
+    private int calculateConfidenceScore(LocationMaster location, SlottingClass recommendedClass) {
+<span class="fc" id="L264">        int score = 50; // Base score</span>
+
+        // Higher confidence if distance is optimal for class
+<span class="pc bpc" id="L267" title="1 of 2 branches missed.">        if (location.getDistanceFromDock() != null) {</span>
+<span class="fc" id="L268">            int idealDistance = recommendedClass.getRecommendedDistanceFromDock() * 20;</span>
+<span class="fc" id="L269">            int distanceDiff = Math.abs(location.getDistanceFromDock() - idealDistance);</span>
+<span class="fc" id="L270">            score += Math.max(0, 30 - distanceDiff); // Up to +30</span>
+        }
+
+        // Higher confidence if location has capacity info
+<span class="pc bpc" id="L274" title="1 of 2 branches missed.">        if (location.getCapacity() != null) {</span>
+<span class="fc" id="L275">            score += 10;</span>
+        }
+
+        // Higher confidence if dimensions are set
+<span class="pc bpc" id="L279" title="1 of 2 branches missed.">        if (location.getDimensions() != null) {</span>
+<span class="fc" id="L280">            score += 10;</span>
+        }
+
+<span class="fc" id="L283">        return Math.min(100, score);</span>
+    }
+
+    /**
+     * Calculate slotting distribution for locations
+     */
+    private SlottingDistribution calculateSlottingDistribution(List&lt;LocationMaster&gt; locations) {
+<span class="fc" id="L290">        Map&lt;SlottingClass, Long&gt; distribution = locations.stream()</span>
+<span class="pc bpc" id="L291" title="1 of 2 branches missed.">            .filter(loc -&gt; loc.getSlottingClass() != null)</span>
+<span class="fc" id="L292">            .collect(Collectors.groupingBy(</span>
+                LocationMaster::getSlottingClass,
+<span class="fc" id="L294">                Collectors.counting()</span>
+            ));
+
+<span class="fc" id="L297">        long total = locations.size();</span>
+<span class="fc" id="L298">        long fastMovers = distribution.getOrDefault(SlottingClass.FAST_MOVER, 0L);</span>
+<span class="fc" id="L299">        long aClass = distribution.getOrDefault(SlottingClass.A, 0L);</span>
+<span class="fc" id="L300">        long bClass = distribution.getOrDefault(SlottingClass.B, 0L);</span>
+<span class="fc" id="L301">        long cClass = distribution.getOrDefault(SlottingClass.C, 0L);</span>
+
+        // Check if distribution follows 80-20 rule (approximately)
+<span class="pc bpc" id="L304" title="2 of 4 branches missed.">        boolean needsRebalancing = total &gt; 0 &amp;&amp;</span>
+            (fastMovers + aClass) * 100 / total &gt; 30; // Should be ~20%
+
+<span class="fc" id="L307">        return new SlottingDistribution(distribution, total, needsRebalancing);</span>
+    }
+
+    /**
+     * Calculate golden zone size (top 20% of locations)
+     */
+    private long calculateGoldenZoneSize(int totalLocations) {
+<span class="fc" id="L314">        return Math.max(1, (long) (totalLocations * 0.2));</span>
+    }
+
+    // DTOs
+<span class="fc" id="L318">    public record SlottingRecommendation(</span>
+        String locationId,
+        SlottingClass currentClass,
+        SlottingClass recommendedClass,
+        int confidenceScore,
+        String reasoning
+    ) {}
+
+<span class="fc" id="L326">    public record SlottingDistribution(</span>
+        Map&lt;SlottingClass, Long&gt; distribution,
+        long totalLocations,
+        boolean needsRebalancing
+    ) {}
+
+<span class="fc" id="L332">    public record SlottingBalanceReport(</span>
+        String warehouseId,
+        Map&lt;String, SlottingDistribution&gt; distributionByZone,
+        int locationsRebalanced
+    ) {}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

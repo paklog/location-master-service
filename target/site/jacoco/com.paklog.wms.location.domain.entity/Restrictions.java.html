@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Restrictions.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">location-master-service</a> &gt; <a href="index.source.html" class="el_package">com.paklog.wms.location.domain.entity</a> &gt; <span class="el_source">Restrictions.java</span></div><h1>Restrictions.java</h1><pre class="source lang-java linenums">package com.paklog.wms.location.domain.entity;
+
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Embeddable;
+import java.util.HashSet;
+import java.util.Set;
+
+/**
+ * Restrictions - Storage restrictions and rules for a location
+ */
+@Embeddable
+public class Restrictions {
+    @ElementCollection
+    private Set&lt;String&gt; allowedProductCategories;
+
+    @ElementCollection
+    private Set&lt;String&gt; blockedProductCategories;
+
+    private Boolean mixedSkuAllowed;
+    private Boolean mixedLotAllowed;
+    private Boolean hazmatAllowed;
+    private Boolean temperatureControlled;
+    private String temperatureRange; // e.g., &quot;2-8C&quot;
+
+    private Integer maxDaysInLocation; // Max aging days
+    private Boolean fifoEnforced; // First-In-First-Out
+    private Boolean lifoEnforced; // Last-In-First-Out
+
+<span class="fc" id="L29">    protected Restrictions() {</span>
+        // JPA constructor
+<span class="fc" id="L31">        this.allowedProductCategories = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L32">        this.blockedProductCategories = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L33">        this.mixedSkuAllowed = true;</span>
+<span class="fc" id="L34">        this.mixedLotAllowed = true;</span>
+<span class="fc" id="L35">        this.hazmatAllowed = false;</span>
+<span class="fc" id="L36">        this.temperatureControlled = false;</span>
+<span class="fc" id="L37">        this.fifoEnforced = false;</span>
+<span class="fc" id="L38">        this.lifoEnforced = false;</span>
+<span class="fc" id="L39">    }</span>
+
+    public static Restrictions createDefault() {
+<span class="fc" id="L42">        return new Restrictions();</span>
+    }
+
+    public static Restrictions createSingleSkuOnly() {
+<span class="nc" id="L46">        Restrictions restrictions = new Restrictions();</span>
+<span class="nc" id="L47">        restrictions.mixedSkuAllowed = false;</span>
+<span class="nc" id="L48">        restrictions.mixedLotAllowed = false;</span>
+<span class="nc" id="L49">        return restrictions;</span>
+    }
+
+    public static Restrictions createHazmat() {
+<span class="fc" id="L53">        Restrictions restrictions = new Restrictions();</span>
+<span class="fc" id="L54">        restrictions.hazmatAllowed = true;</span>
+<span class="fc" id="L55">        restrictions.mixedSkuAllowed = false;</span>
+<span class="fc" id="L56">        return restrictions;</span>
+    }
+
+    public static Restrictions createTemperatureControlled(String temperatureRange) {
+<span class="nc" id="L60">        Restrictions restrictions = new Restrictions();</span>
+<span class="nc" id="L61">        restrictions.temperatureControlled = true;</span>
+<span class="nc" id="L62">        restrictions.temperatureRange = temperatureRange;</span>
+<span class="nc" id="L63">        restrictions.mixedSkuAllowed = true;</span>
+<span class="nc" id="L64">        return restrictions;</span>
+    }
+
+    /**
+     * Check if product category is allowed
+     */
+    public boolean isProductCategoryAllowed(String category) {
+<span class="pc bpc" id="L71" title="2 of 4 branches missed.">        if (category == null || category.isBlank()) {</span>
+<span class="nc" id="L72">            return false;</span>
+        }
+
+        // If blocked list contains category, deny
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        if (blockedProductCategories.contains(category)) {</span>
+<span class="fc" id="L77">            return false;</span>
+        }
+
+        // If allowed list is empty, allow all (except blocked)
+<span class="fc bfc" id="L81" title="All 2 branches covered.">        if (allowedProductCategories.isEmpty()) {</span>
+<span class="fc" id="L82">            return true;</span>
+        }
+
+        // Check if in allowed list
+<span class="fc" id="L86">        return allowedProductCategories.contains(category);</span>
+    }
+
+    /**
+     * Add allowed product category
+     */
+    public void addAllowedCategory(String category) {
+<span class="pc bpc" id="L93" title="2 of 4 branches missed.">        if (category != null &amp;&amp; !category.isBlank()) {</span>
+<span class="fc" id="L94">            allowedProductCategories.add(category);</span>
+        }
+<span class="fc" id="L96">    }</span>
+
+    /**
+     * Block product category
+     */
+    public void blockCategory(String category) {
+<span class="pc bpc" id="L102" title="2 of 4 branches missed.">        if (category != null &amp;&amp; !category.isBlank()) {</span>
+<span class="fc" id="L103">            blockedProductCategories.add(category);</span>
+<span class="fc" id="L104">            allowedProductCategories.remove(category);</span>
+        }
+<span class="fc" id="L106">    }</span>
+
+    /**
+     * Set mixed SKU policy
+     */
+    public void setMixedSkuAllowed(boolean allowed) {
+<span class="nc" id="L112">        this.mixedSkuAllowed = allowed;</span>
+<span class="nc" id="L113">    }</span>
+
+    /**
+     * Set mixed lot policy
+     */
+    public void setMixedLotAllowed(boolean allowed) {
+<span class="nc" id="L119">        this.mixedLotAllowed = allowed;</span>
+<span class="nc" id="L120">    }</span>
+
+    /**
+     * Configure hazmat storage
+     */
+    public void configureHazmat(boolean allowed) {
+<span class="fc" id="L126">        this.hazmatAllowed = allowed;</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">        if (allowed) {</span>
+            // Hazmat locations should not mix SKUs for safety
+<span class="fc" id="L129">            this.mixedSkuAllowed = false;</span>
+        }
+<span class="fc" id="L131">    }</span>
+
+    /**
+     * Configure temperature control
+     */
+    public void configureTemperatureControl(boolean controlled, String temperatureRange) {
+<span class="fc" id="L137">        this.temperatureControlled = controlled;</span>
+<span class="fc" id="L138">        this.temperatureRange = temperatureRange;</span>
+<span class="fc" id="L139">    }</span>
+
+    /**
+     * Set aging policy
+     */
+    public void setMaxDaysInLocation(Integer maxDays) {
+<span class="pc bpc" id="L145" title="1 of 4 branches missed.">        if (maxDays != null &amp;&amp; maxDays &lt;= 0) {</span>
+<span class="fc" id="L146">            throw new IllegalArgumentException(&quot;Max days must be positive&quot;);</span>
+        }
+<span class="fc" id="L148">        this.maxDaysInLocation = maxDays;</span>
+<span class="fc" id="L149">    }</span>
+
+    /**
+     * Configure FIFO enforcement
+     */
+    public void enforceFifo(boolean enforce) {
+<span class="fc" id="L155">        this.fifoEnforced = enforce;</span>
+<span class="pc bpc" id="L156" title="1 of 2 branches missed.">        if (enforce) {</span>
+<span class="fc" id="L157">            this.lifoEnforced = false; // Cannot have both FIFO and LIFO</span>
+        }
+<span class="fc" id="L159">    }</span>
+
+    /**
+     * Configure LIFO enforcement
+     */
+    public void enforceLifo(boolean enforce) {
+<span class="fc" id="L165">        this.lifoEnforced = enforce;</span>
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">        if (enforce) {</span>
+<span class="fc" id="L167">            this.fifoEnforced = false; // Cannot have both FIFO and LIFO</span>
+        }
+<span class="fc" id="L169">    }</span>
+
+    /**
+     * Check if location has any active restrictions
+     */
+    public boolean hasActiveRestrictions() {
+<span class="fc bfc" id="L175" title="All 2 branches covered.">        return !allowedProductCategories.isEmpty() ||</span>
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">               !blockedProductCategories.isEmpty() ||</span>
+<span class="pc bpc" id="L177" title="1 of 2 branches missed.">               !mixedSkuAllowed ||</span>
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">               !mixedLotAllowed ||</span>
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">               hazmatAllowed ||</span>
+<span class="pc bpc" id="L180" title="2 of 4 branches missed.">               temperatureControlled ||</span>
+               maxDaysInLocation != null ||
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">               fifoEnforced ||</span>
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">               lifoEnforced;</span>
+    }
+
+    // Getters
+    public Set&lt;String&gt; getAllowedProductCategories() {
+<span class="nc" id="L188">        return new HashSet&lt;&gt;(allowedProductCategories);</span>
+    }
+
+    public Set&lt;String&gt; getBlockedProductCategories() {
+<span class="nc" id="L192">        return new HashSet&lt;&gt;(blockedProductCategories);</span>
+    }
+
+    public Boolean getMixedSkuAllowed() {
+<span class="fc" id="L196">        return mixedSkuAllowed;</span>
+    }
+
+    public Boolean getMixedLotAllowed() {
+<span class="nc" id="L200">        return mixedLotAllowed;</span>
+    }
+
+    public Boolean getHazmatAllowed() {
+<span class="fc" id="L204">        return hazmatAllowed;</span>
+    }
+
+    public Boolean getTemperatureControlled() {
+<span class="fc" id="L208">        return temperatureControlled;</span>
+    }
+
+    public String getTemperatureRange() {
+<span class="fc" id="L212">        return temperatureRange;</span>
+    }
+
+    public Integer getMaxDaysInLocation() {
+<span class="fc" id="L216">        return maxDaysInLocation;</span>
+    }
+
+    public Boolean getFifoEnforced() {
+<span class="fc" id="L220">        return fifoEnforced;</span>
+    }
+
+    public Boolean getLifoEnforced() {
+<span class="fc" id="L224">        return lifoEnforced;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L229">        return String.format(&quot;Restrictions[mixedSku=%s, hazmat=%s, tempControl=%s, restrictions=%s]&quot;,</span>
+            mixedSkuAllowed, hazmatAllowed, temperatureControlled,
+<span class="nc bnc" id="L231" title="All 2 branches missed.">            hasActiveRestrictions() ? &quot;active&quot; : &quot;none&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

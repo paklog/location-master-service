@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.paklog.wms.location.adapter.rest.LocationControllerTest
+-------------------------------------------------------------------------------
+Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 13.02 s -- in com.paklog.wms.location.adapter.rest.LocationControllerTest

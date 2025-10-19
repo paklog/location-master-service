@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.paklog.wms.location.domain.repository.LocationMasterRepositoryIntegrationTest
+-------------------------------------------------------------------------------
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.107 s -- in com.paklog.wms.location.domain.repository.LocationMasterRepositoryIntegrationTest

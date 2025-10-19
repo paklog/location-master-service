@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocationMaster.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">location-master-service</a> &gt; <a href="index.source.html" class="el_package">com.paklog.wms.location.domain.aggregate</a> &gt; <span class="el_source">LocationMaster.java</span></div><h1>LocationMaster.java</h1><pre class="source lang-java linenums">package com.paklog.wms.location.domain.aggregate;
+
+import com.paklog.wms.location.domain.entity.Capacity;
+import com.paklog.wms.location.domain.entity.Dimensions;
+import com.paklog.wms.location.domain.entity.Restrictions;
+import com.paklog.wms.location.domain.valueobject.LocationStatus;
+import com.paklog.wms.location.domain.valueobject.LocationType;
+import com.paklog.wms.location.domain.valueobject.SlottingClass;
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * LocationMaster - Aggregate root for warehouse location configuration
+ *
+ * Represents a location in the warehouse hierarchy with its configuration,
+ * capacity, dimensions, restrictions, and slotting classification.
+ */
+@Entity
+@Table(name = &quot;location_master&quot;, indexes = {
+    @Index(name = &quot;idx_warehouse_id&quot;, columnList = &quot;warehouseId&quot;),
+    @Index(name = &quot;idx_parent_location&quot;, columnList = &quot;parentLocationId&quot;),
+    @Index(name = &quot;idx_zone&quot;, columnList = &quot;zone&quot;),
+    @Index(name = &quot;idx_status&quot;, columnList = &quot;status&quot;),
+    @Index(name = &quot;idx_type_status&quot;, columnList = &quot;type,status&quot;),
+    @Index(name = &quot;idx_slotting_class&quot;, columnList = &quot;slottingClass&quot;)
+})
+public class LocationMaster {
+
+    @Id
+    private String locationId; // e.g., &quot;WH-001-A-01-02-03&quot;
+
+    @Column(nullable = false)
+    private String warehouseId; // e.g., &quot;WH-001&quot;
+
+    @Column(nullable = false)
+    private String locationName; // Human-readable name
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private LocationType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private LocationStatus status;
+
+    // Hierarchy
+    private String parentLocationId;
+
+    @Column(nullable = false)
+    private Integer hierarchyLevel; // 0 = warehouse, 1 = zone, etc.
+
+    private String zone; // Functional zone (PICK, PACK, STAGING, etc.)
+
+    // Physical location in warehouse
+    private String aisle;
+    private String bay;
+    private String level;
+    private String position;
+
+    // Configuration
+    @Embedded
+    private Dimensions dimensions;
+
+    @Embedded
+    private Capacity capacity;
+
+    @Embedded
+    private Restrictions restrictions;
+
+    // Slotting
+    @Enumerated(EnumType.STRING)
+    private SlottingClass slottingClass;
+
+    private Integer distanceFromDock; // In meters or feet
+
+    private Integer pickPathSequence; // Order in pick path
+
+    // Coordinates for mapping/routing
+    private Double xCoordinate;
+    private Double yCoordinate;
+    private Double zCoordinate;
+
+    // Metadata
+    @ElementCollection
+    @CollectionTable(name = &quot;location_attributes&quot;,
+                     joinColumns = @JoinColumn(name = &quot;location_id&quot;))
+    @MapKeyColumn(name = &quot;attribute_key&quot;)
+    @Column(name = &quot;attribute_value&quot;)
+    private Map&lt;String, String&gt; attributes;
+
+    // Audit
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    private String createdBy;
+    private String updatedBy;
+
+    @Version
+    private Long version;
+
+<span class="fc" id="L106">    protected LocationMaster() {</span>
+        // JPA constructor
+<span class="fc" id="L108">    }</span>
+
+    /**
+     * Create a new location
+     */
+    public static LocationMaster create(
+            String locationId,
+            String warehouseId,
+            String locationName,
+            LocationType type,
+            String parentLocationId,
+            Integer hierarchyLevel,
+            String zone
+    ) {
+<span class="fc" id="L122">        LocationMaster location = new LocationMaster();</span>
+<span class="fc" id="L123">        location.locationId = locationId;</span>
+<span class="fc" id="L124">        location.warehouseId = warehouseId;</span>
+<span class="fc" id="L125">        location.locationName = locationName;</span>
+<span class="fc" id="L126">        location.type = type;</span>
+<span class="fc" id="L127">        location.status = LocationStatus.ACTIVE;</span>
+<span class="fc" id="L128">        location.parentLocationId = parentLocationId;</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        location.hierarchyLevel = hierarchyLevel != null ? hierarchyLevel : type.getHierarchyDepth();</span>
+<span class="fc" id="L130">        location.zone = zone;</span>
+<span class="fc" id="L131">        location.attributes = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L132">        location.createdAt = LocalDateTime.now();</span>
+<span class="fc" id="L133">        location.updatedAt = LocalDateTime.now();</span>
+
+        // Initialize defaults
+<span class="fc" id="L136">        location.restrictions = Restrictions.createDefault();</span>
+<span class="fc" id="L137">        location.slottingClass = SlottingClass.MIXED;</span>
+
+<span class="fc" id="L139">        return location;</span>
+    }
+
+    /**
+     * Configure location dimensions
+     */
+    public void configureDimensions(Dimensions dimensions) {
+<span class="fc bfc" id="L146" title="All 2 branches covered.">        if (dimensions == null) {</span>
+<span class="fc" id="L147">            throw new IllegalArgumentException(&quot;Dimensions cannot be null&quot;);</span>
+        }
+<span class="fc" id="L149">        this.dimensions = dimensions;</span>
+<span class="fc" id="L150">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L151">    }</span>
+
+    /**
+     * Configure location capacity
+     */
+    public void configureCapacity(Capacity capacity) {
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if (capacity == null) {</span>
+<span class="fc" id="L158">            throw new IllegalArgumentException(&quot;Capacity cannot be null&quot;);</span>
+        }
+<span class="fc" id="L160">        this.capacity = capacity;</span>
+<span class="fc" id="L161">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L162">    }</span>
+
+    /**
+     * Configure location restrictions
+     */
+    public void configureRestrictions(Restrictions restrictions) {
+<span class="fc bfc" id="L168" title="All 2 branches covered.">        if (restrictions == null) {</span>
+<span class="fc" id="L169">            throw new IllegalArgumentException(&quot;Restrictions cannot be null&quot;);</span>
+        }
+<span class="fc" id="L171">        this.restrictions = restrictions;</span>
+<span class="fc" id="L172">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L173">    }</span>
+
+    /**
+     * Set slotting classification
+     */
+    public void setSlottingClass(SlottingClass slottingClass) {
+<span class="fc bfc" id="L179" title="All 2 branches covered.">        if (slottingClass == null) {</span>
+<span class="fc" id="L180">            throw new IllegalArgumentException(&quot;Slotting class cannot be null&quot;);</span>
+        }
+<span class="fc" id="L182">        this.slottingClass = slottingClass;</span>
+<span class="fc" id="L183">        this.pickPathSequence = slottingClass.getPickPathPriority() * 1000; // Base sequence</span>
+<span class="fc" id="L184">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L185">    }</span>
+
+    /**
+     * Set pick path sequence
+     */
+    public void setPickPathSequence(Integer sequence) {
+<span class="pc bpc" id="L191" title="1 of 4 branches missed.">        if (sequence != null &amp;&amp; sequence &lt; 0) {</span>
+<span class="fc" id="L192">            throw new IllegalArgumentException(&quot;Pick path sequence must be non-negative&quot;);</span>
+        }
+<span class="fc" id="L194">        this.pickPathSequence = sequence;</span>
+<span class="fc" id="L195">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L196">    }</span>
+
+    /**
+     * Set physical location coordinates
+     */
+    public void setCoordinates(Double x, Double y, Double z) {
+<span class="fc" id="L202">        this.xCoordinate = x;</span>
+<span class="fc" id="L203">        this.yCoordinate = y;</span>
+<span class="fc" id="L204">        this.zCoordinate = z;</span>
+<span class="fc" id="L205">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L206">    }</span>
+
+    /**
+     * Set aisle/bay/level/position
+     */
+    public void setPhysicalAddress(String aisle, String bay, String level, String position) {
+<span class="fc" id="L212">        this.aisle = aisle;</span>
+<span class="fc" id="L213">        this.bay = bay;</span>
+<span class="fc" id="L214">        this.level = level;</span>
+<span class="fc" id="L215">        this.position = position;</span>
+<span class="fc" id="L216">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L217">    }</span>
+
+    /**
+     * Set distance from dock
+     */
+    public void setDistanceFromDock(Integer distance) {
+<span class="pc bpc" id="L223" title="1 of 4 branches missed.">        if (distance != null &amp;&amp; distance &lt; 0) {</span>
+<span class="fc" id="L224">            throw new IllegalArgumentException(&quot;Distance cannot be negative&quot;);</span>
+        }
+<span class="fc" id="L226">        this.distanceFromDock = distance;</span>
+<span class="fc" id="L227">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L228">    }</span>
+
+    /**
+     * Activate location
+     */
+    public void activate() {
+<span class="fc bfc" id="L234" title="All 2 branches covered.">        if (status == LocationStatus.DECOMMISSIONED) {</span>
+<span class="fc" id="L235">            throw new IllegalStateException(&quot;Cannot activate decommissioned location&quot;);</span>
+        }
+<span class="fc" id="L237">        this.status = LocationStatus.ACTIVE;</span>
+<span class="fc" id="L238">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L239">    }</span>
+
+    /**
+     * Deactivate location
+     */
+    public void deactivate() {
+<span class="fc" id="L245">        this.status = LocationStatus.INACTIVE;</span>
+<span class="fc" id="L246">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L247">    }</span>
+
+    /**
+     * Block location
+     */
+    public void block(String reason) {
+<span class="fc" id="L253">        this.status = LocationStatus.BLOCKED;</span>
+<span class="fc" id="L254">        this.setAttribute(&quot;block_reason&quot;, reason);</span>
+<span class="fc" id="L255">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L256">    }</span>
+
+    /**
+     * Unblock location
+     */
+    public void unblock() {
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">        if (status != LocationStatus.BLOCKED) {</span>
+<span class="nc" id="L263">            throw new IllegalStateException(&quot;Location is not blocked&quot;);</span>
+        }
+<span class="fc" id="L265">        this.status = LocationStatus.ACTIVE;</span>
+<span class="fc" id="L266">        this.removeAttribute(&quot;block_reason&quot;);</span>
+<span class="fc" id="L267">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L268">    }</span>
+
+    /**
+     * Mark location as full
+     */
+    public void markAsFull() {
+<span class="fc" id="L274">        this.status = LocationStatus.FULL;</span>
+<span class="fc" id="L275">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L276">    }</span>
+
+    /**
+     * Mark location as available
+     */
+    public void markAsAvailable() {
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">        if (status == LocationStatus.FULL) {</span>
+<span class="fc" id="L283">            this.status = LocationStatus.ACTIVE;</span>
+<span class="fc" id="L284">            this.updatedAt = LocalDateTime.now();</span>
+        }
+<span class="fc" id="L286">    }</span>
+
+    /**
+     * Reserve location
+     */
+    public void reserve(String purpose) {
+<span class="fc" id="L292">        this.status = LocationStatus.RESERVED;</span>
+<span class="fc" id="L293">        this.setAttribute(&quot;reservation_purpose&quot;, purpose);</span>
+<span class="fc" id="L294">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L295">    }</span>
+
+    /**
+     * Release reservation
+     */
+    public void releaseReservation() {
+<span class="fc bfc" id="L301" title="All 2 branches covered.">        if (status != LocationStatus.RESERVED) {</span>
+<span class="fc" id="L302">            throw new IllegalStateException(&quot;Location is not reserved&quot;);</span>
+        }
+<span class="fc" id="L304">        this.status = LocationStatus.ACTIVE;</span>
+<span class="fc" id="L305">        this.removeAttribute(&quot;reservation_purpose&quot;);</span>
+<span class="fc" id="L306">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L307">    }</span>
+
+    /**
+     * Decommission location permanently
+     */
+    public void decommission(String reason) {
+<span class="fc" id="L313">        this.status = LocationStatus.DECOMMISSIONED;</span>
+<span class="fc" id="L314">        this.setAttribute(&quot;decommission_reason&quot;, reason);</span>
+<span class="fc" id="L315">        this.setAttribute(&quot;decommissioned_at&quot;, LocalDateTime.now().toString());</span>
+<span class="fc" id="L316">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L317">    }</span>
+
+    /**
+     * Set custom attribute
+     */
+    public void setAttribute(String key, String value) {
+<span class="pc bpc" id="L323" title="1 of 4 branches missed.">        if (key == null || key.isBlank()) {</span>
+<span class="fc" id="L324">            throw new IllegalArgumentException(&quot;Attribute key cannot be null or blank&quot;);</span>
+        }
+<span class="fc" id="L326">        this.attributes.put(key, value);</span>
+<span class="fc" id="L327">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L328">    }</span>
+
+    /**
+     * Remove attribute
+     */
+    public void removeAttribute(String key) {
+<span class="fc" id="L334">        this.attributes.remove(key);</span>
+<span class="fc" id="L335">        this.updatedAt = LocalDateTime.now();</span>
+<span class="fc" id="L336">    }</span>
+
+    /**
+     * Get attribute value
+     */
+    public String getAttribute(String key) {
+<span class="fc" id="L342">        return attributes.get(key);</span>
+    }
+
+    /**
+     * Check if location can accept inventory
+     */
+    public boolean canAcceptInventory() {
+<span class="nc bnc" id="L349" title="All 4 branches missed.">        return status.canAcceptInventory() &amp;&amp; type.canStoreInventory();</span>
+    }
+
+    /**
+     * Check if location can have child locations
+     */
+    public boolean canHaveChildren() {
+<span class="fc" id="L356">        return type.canHaveChildren();</span>
+    }
+
+    /**
+     * Validate location hierarchy
+     */
+    public void validateHierarchy() {
+<span class="fc bfc" id="L363" title="All 2 branches covered.">        if (hierarchyLevel != type.getHierarchyDepth()) {</span>
+<span class="fc" id="L364">            throw new IllegalStateException(</span>
+<span class="fc" id="L365">                String.format(&quot;Hierarchy level %d does not match type %s (expected %d)&quot;,</span>
+<span class="fc" id="L366">                    hierarchyLevel, type, type.getHierarchyDepth())</span>
+            );
+        }
+
+<span class="fc bfc" id="L370" title="All 4 branches covered.">        if (hierarchyLevel &gt; 0 &amp;&amp; parentLocationId == null) {</span>
+<span class="fc" id="L371">            throw new IllegalStateException(&quot;Non-root location must have a parent&quot;);</span>
+        }
+
+<span class="pc bpc" id="L374" title="1 of 4 branches missed.">        if (hierarchyLevel == 0 &amp;&amp; parentLocationId != null) {</span>
+<span class="fc" id="L375">            throw new IllegalStateException(&quot;Root location cannot have a parent&quot;);</span>
+        }
+<span class="fc" id="L377">    }</span>
+
+    /**
+     * Get full location path
+     */
+    public String getFullPath() {
+<span class="fc" id="L383">        StringBuilder path = new StringBuilder(locationName);</span>
+<span class="pc bpc" id="L384" title="1 of 2 branches missed.">        if (aisle != null) path.append(&quot;/&quot;).append(aisle);</span>
+<span class="pc bpc" id="L385" title="1 of 2 branches missed.">        if (bay != null) path.append(&quot;/&quot;).append(bay);</span>
+<span class="pc bpc" id="L386" title="1 of 2 branches missed.">        if (level != null) path.append(&quot;/&quot;).append(level);</span>
+<span class="pc bpc" id="L387" title="1 of 2 branches missed.">        if (position != null) path.append(&quot;/&quot;).append(position);</span>
+<span class="fc" id="L388">        return path.toString();</span>
+    }
+
+    // Getters
+    public String getLocationId() {
+<span class="fc" id="L393">        return locationId;</span>
+    }
+
+    public String getWarehouseId() {
+<span class="fc" id="L397">        return warehouseId;</span>
+    }
+
+    public String getLocationName() {
+<span class="fc" id="L401">        return locationName;</span>
+    }
+
+    public LocationType getType() {
+<span class="fc" id="L405">        return type;</span>
+    }
+
+    public LocationStatus getStatus() {
+<span class="fc" id="L409">        return status;</span>
+    }
+
+    public String getParentLocationId() {
+<span class="fc" id="L413">        return parentLocationId;</span>
+    }
+
+    public Integer getHierarchyLevel() {
+<span class="fc" id="L417">        return hierarchyLevel;</span>
+    }
+
+    public String getZone() {
+<span class="fc" id="L421">        return zone;</span>
+    }
+
+    public String getAisle() {
+<span class="fc" id="L425">        return aisle;</span>
+    }
+
+    public String getBay() {
+<span class="fc" id="L429">        return bay;</span>
+    }
+
+    public String getLevel() {
+<span class="fc" id="L433">        return level;</span>
+    }
+
+    public String getPosition() {
+<span class="fc" id="L437">        return position;</span>
+    }
+
+    public Dimensions getDimensions() {
+<span class="fc" id="L441">        return dimensions;</span>
+    }
+
+    public Capacity getCapacity() {
+<span class="fc" id="L445">        return capacity;</span>
+    }
+
+    public Restrictions getRestrictions() {
+<span class="fc" id="L449">        return restrictions;</span>
+    }
+
+    public SlottingClass getSlottingClass() {
+<span class="fc" id="L453">        return slottingClass;</span>
+    }
+
+    public Integer getDistanceFromDock() {
+<span class="fc" id="L457">        return distanceFromDock;</span>
+    }
+
+    public Integer getPickPathSequence() {
+<span class="fc" id="L461">        return pickPathSequence;</span>
+    }
+
+    public Double getXCoordinate() {
+<span class="fc" id="L465">        return xCoordinate;</span>
+    }
+
+    public Double getYCoordinate() {
+<span class="nc" id="L469">        return yCoordinate;</span>
+    }
+
+    public Double getZCoordinate() {
+<span class="nc" id="L473">        return zCoordinate;</span>
+    }
+
+    public Map&lt;String, String&gt; getAttributes() {
+<span class="fc" id="L477">        return new HashMap&lt;&gt;(attributes);</span>
+    }
+
+    public LocalDateTime getCreatedAt() {
+<span class="fc" id="L481">        return createdAt;</span>
+    }
+
+    public LocalDateTime getUpdatedAt() {
+<span class="fc" id="L485">        return updatedAt;</span>
+    }
+
+    public String getCreatedBy() {
+<span class="nc" id="L489">        return createdBy;</span>
+    }
+
+    public void setCreatedBy(String createdBy) {
+<span class="fc" id="L493">        this.createdBy = createdBy;</span>
+<span class="fc" id="L494">    }</span>
+
+    public String getUpdatedBy() {
+<span class="nc" id="L497">        return updatedBy;</span>
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+<span class="fc" id="L501">        this.updatedBy = updatedBy;</span>
+<span class="fc" id="L502">    }</span>
+
+    @PreUpdate
+    protected void onUpdate() {
+<span class="nc" id="L506">        this.updatedAt = LocalDateTime.now();</span>
+<span class="nc" id="L507">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L511">        return String.format(&quot;Location[id=%s, name=%s, type=%s, status=%s, zone=%s]&quot;,</span>
+            locationId, locationName, type, status, zone);
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

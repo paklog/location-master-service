@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocationController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">location-master-service</a> &gt; <a href="index.source.html" class="el_package">com.paklog.wms.location.adapter.rest</a> &gt; <span class="el_source">LocationController.java</span></div><h1>LocationController.java</h1><pre class="source lang-java linenums">package com.paklog.wms.location.adapter.rest;
+
+import com.paklog.wms.location.adapter.rest.dto.*;
+import com.paklog.wms.location.application.service.LocationConfigurationService;
+import com.paklog.wms.location.application.service.SlottingService;
+import com.paklog.wms.location.domain.aggregate.LocationMaster;
+import com.paklog.wms.location.domain.valueobject.LocationStatus;
+import com.paklog.wms.location.domain.valueobject.SlottingClass;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * REST API for location master configuration and management
+ */
+@RestController
+@RequestMapping(&quot;/api/v1/locations&quot;)
+@Tag(name = &quot;Location Management&quot;, description = &quot;Location configuration and hierarchy management&quot;)
+public class LocationController {
+
+    private final LocationConfigurationService configService;
+    private final SlottingService slottingService;
+
+    public LocationController(
+            LocationConfigurationService configService,
+            SlottingService slottingService
+<span class="fc" id="L33">    ) {</span>
+<span class="fc" id="L34">        this.configService = configService;</span>
+<span class="fc" id="L35">        this.slottingService = slottingService;</span>
+<span class="fc" id="L36">    }</span>
+
+    /**
+     * Create a new location
+     */
+    @PostMapping
+    @Operation(summary = &quot;Create location&quot;, description = &quot;Create a new location in the warehouse hierarchy&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; createLocation(
+            @Valid @RequestBody CreateLocationRequest request,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L47">        LocationMaster location = configService.createLocation(</span>
+<span class="fc" id="L48">            request.locationId(),</span>
+<span class="fc" id="L49">            request.warehouseId(),</span>
+<span class="fc" id="L50">            request.locationName(),</span>
+<span class="fc" id="L51">            request.type(),</span>
+<span class="fc" id="L52">            request.parentLocationId(),</span>
+<span class="fc" id="L53">            request.hierarchyLevel(),</span>
+<span class="fc" id="L54">            request.zone(),</span>
+            userId
+        );
+
+<span class="fc" id="L58">        return ResponseEntity.status(HttpStatus.CREATED)</span>
+<span class="fc" id="L59">            .body(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Get location by ID
+     */
+    @GetMapping(&quot;/{locationId}&quot;)
+    @Operation(summary = &quot;Get location&quot;, description = &quot;Get location details by ID&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; getLocation(@PathVariable String locationId) {
+<span class="fc" id="L68">        return configService.getLocation(locationId)</span>
+<span class="fc" id="L69">            .map(LocationResponse::from)</span>
+<span class="fc" id="L70">            .map(ResponseEntity::ok)</span>
+<span class="fc" id="L71">            .orElse(ResponseEntity.notFound().build());</span>
+    }
+
+    /**
+     * Get locations by warehouse
+     */
+    @GetMapping
+    @Operation(summary = &quot;List locations&quot;, description = &quot;List all locations for a warehouse&quot;)
+    public ResponseEntity&lt;List&lt;LocationResponse&gt;&gt; getLocations(
+            @RequestParam String warehouseId,
+            @RequestParam(required = false) LocationStatus status,
+            @RequestParam(required = false) String zone
+    ) {
+        List&lt;LocationMaster&gt; locations;
+
+<span class="pc bpc" id="L86" title="1 of 4 branches missed.">        if (status != null &amp;&amp; zone != null) {</span>
+<span class="nc" id="L87">            locations = configService.getLocationsByWarehouse(warehouseId).stream()</span>
+<span class="nc bnc" id="L88" title="All 4 branches missed.">                .filter(loc -&gt; loc.getStatus() == status &amp;&amp; zone.equals(loc.getZone()))</span>
+<span class="nc" id="L89">                .collect(Collectors.toList());</span>
+<span class="fc bfc" id="L90" title="All 2 branches covered.">        } else if (status != null) {</span>
+<span class="fc" id="L91">            locations = configService.getLocationsByWarehouse(warehouseId).stream()</span>
+<span class="fc bfc" id="L92" title="All 2 branches covered.">                .filter(loc -&gt; loc.getStatus() == status)</span>
+<span class="fc" id="L93">                .collect(Collectors.toList());</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        } else if (zone != null) {</span>
+<span class="fc" id="L95">            locations = configService.getLocationsByWarehouse(warehouseId).stream()</span>
+<span class="fc" id="L96">                .filter(loc -&gt; zone.equals(loc.getZone()))</span>
+<span class="fc" id="L97">                .collect(Collectors.toList());</span>
+        } else {
+<span class="fc" id="L99">            locations = configService.getLocationsByWarehouse(warehouseId);</span>
+        }
+
+<span class="fc" id="L102">        return ResponseEntity.ok(</span>
+<span class="fc" id="L103">            locations.stream()</span>
+<span class="fc" id="L104">                .map(LocationResponse::from)</span>
+<span class="fc" id="L105">                .collect(Collectors.toList())</span>
+        );
+    }
+
+    /**
+     * Get active storage locations
+     */
+    @GetMapping(&quot;/storage&quot;)
+    @Operation(summary = &quot;Get storage locations&quot;, description = &quot;Get active storage locations&quot;)
+    public ResponseEntity&lt;List&lt;LocationResponse&gt;&gt; getStorageLocations(
+            @RequestParam String warehouseId
+    ) {
+<span class="fc" id="L117">        List&lt;LocationMaster&gt; locations = configService.getActiveStorageLocations(warehouseId);</span>
+<span class="fc" id="L118">        return ResponseEntity.ok(</span>
+<span class="fc" id="L119">            locations.stream()</span>
+<span class="fc" id="L120">                .map(LocationResponse::from)</span>
+<span class="fc" id="L121">                .collect(Collectors.toList())</span>
+        );
+    }
+
+    /**
+     * Get pick path locations
+     */
+    @GetMapping(&quot;/pick-path&quot;)
+    @Operation(summary = &quot;Get pick path&quot;, description = &quot;Get locations in pick path order&quot;)
+    public ResponseEntity&lt;List&lt;LocationResponse&gt;&gt; getPickPathLocations(
+            @RequestParam String warehouseId,
+            @RequestParam String zone
+    ) {
+<span class="fc" id="L134">        List&lt;LocationMaster&gt; locations = configService.getPickPathLocations(warehouseId, zone);</span>
+<span class="fc" id="L135">        return ResponseEntity.ok(</span>
+<span class="fc" id="L136">            locations.stream()</span>
+<span class="fc" id="L137">                .map(LocationResponse::from)</span>
+<span class="fc" id="L138">                .collect(Collectors.toList())</span>
+        );
+    }
+
+    /**
+     * Get child locations
+     */
+    @GetMapping(&quot;/{locationId}/children&quot;)
+    @Operation(summary = &quot;Get child locations&quot;, description = &quot;Get all child locations of a parent&quot;)
+    public ResponseEntity&lt;List&lt;LocationResponse&gt;&gt; getChildLocations(
+            @PathVariable String locationId
+    ) {
+<span class="fc" id="L150">        List&lt;LocationMaster&gt; children = configService.getChildLocations(locationId);</span>
+<span class="fc" id="L151">        return ResponseEntity.ok(</span>
+<span class="fc" id="L152">            children.stream()</span>
+<span class="fc" id="L153">                .map(LocationResponse::from)</span>
+<span class="fc" id="L154">                .collect(Collectors.toList())</span>
+        );
+    }
+
+    /**
+     * Configure location capacity
+     */
+    @PutMapping(&quot;/{locationId}/capacity&quot;)
+    @Operation(summary = &quot;Configure capacity&quot;, description = &quot;Configure location capacity limits&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; configureCapacity(
+            @PathVariable String locationId,
+            @Valid @RequestBody ConfigureCapacityRequest request,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L168">        LocationMaster location = configService.configureCapacity(</span>
+            locationId,
+<span class="fc" id="L170">            request.toCapacity(),</span>
+            userId,
+<span class="fc" id="L172">            request.reason()</span>
+        );
+
+<span class="fc" id="L175">        return ResponseEntity.ok(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Update slotting class
+     */
+    @PutMapping(&quot;/{locationId}/slotting&quot;)
+    @Operation(summary = &quot;Update slotting&quot;, description = &quot;Update location slotting classification&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; updateSlotting(
+            @PathVariable String locationId,
+            @Valid @RequestBody UpdateSlottingRequest request,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L188">        LocationMaster location = configService.updateSlottingClass(</span>
+            locationId,
+<span class="fc" id="L190">            request.slottingClass(),</span>
+            userId,
+<span class="fc" id="L192">            request.reason()</span>
+        );
+
+<span class="fc" id="L195">        return ResponseEntity.ok(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Activate location
+     */
+    @PostMapping(&quot;/{locationId}/activate&quot;)
+    @Operation(summary = &quot;Activate location&quot;, description = &quot;Activate a location&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; activateLocation(
+            @PathVariable String locationId,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L207">        LocationMaster location = configService.activateLocation(locationId, userId);</span>
+<span class="fc" id="L208">        return ResponseEntity.ok(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Deactivate location
+     */
+    @PostMapping(&quot;/{locationId}/deactivate&quot;)
+    @Operation(summary = &quot;Deactivate location&quot;, description = &quot;Deactivate a location&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; deactivateLocation(
+            @PathVariable String locationId,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L220">        LocationMaster location = configService.deactivateLocation(locationId, userId);</span>
+<span class="fc" id="L221">        return ResponseEntity.ok(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Block location
+     */
+    @PostMapping(&quot;/{locationId}/block&quot;)
+    @Operation(summary = &quot;Block location&quot;, description = &quot;Block a location&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; blockLocation(
+            @PathVariable String locationId,
+            @Valid @RequestBody BlockLocationRequest request,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L234">        LocationMaster location = configService.blockLocation(</span>
+            locationId,
+<span class="fc" id="L236">            request.reason(),</span>
+            userId
+        );
+<span class="fc" id="L239">        return ResponseEntity.ok(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Unblock location
+     */
+    @PostMapping(&quot;/{locationId}/unblock&quot;)
+    @Operation(summary = &quot;Unblock location&quot;, description = &quot;Unblock a location&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; unblockLocation(
+            @PathVariable String locationId,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L251">        LocationMaster location = configService.unblockLocation(locationId, userId);</span>
+<span class="fc" id="L252">        return ResponseEntity.ok(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Reserve location
+     */
+    @PostMapping(&quot;/{locationId}/reserve&quot;)
+    @Operation(summary = &quot;Reserve location&quot;, description = &quot;Reserve a location&quot;)
+    public ResponseEntity&lt;LocationResponse&gt; reserveLocation(
+            @PathVariable String locationId,
+            @Valid @RequestBody ReserveLocationRequest request,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L265">        LocationMaster location = configService.reserveLocation(</span>
+            locationId,
+<span class="fc" id="L267">            request.purpose(),</span>
+            userId
+        );
+<span class="fc" id="L270">        return ResponseEntity.ok(LocationResponse.from(location));</span>
+    }
+
+    /**
+     * Get slotting recommendations
+     */
+    @GetMapping(&quot;/slotting/recommendations&quot;)
+    @Operation(summary = &quot;Get slotting recommendations&quot;, description = &quot;Get AI-powered slotting recommendations&quot;)
+    public ResponseEntity&lt;List&lt;SlottingRecommendationResponse&gt;&gt; getSlottingRecommendations(
+            @RequestParam String warehouseId
+    ) {
+<span class="fc" id="L281">        var recommendations = slottingService.getSlottingRecommendations(warehouseId);</span>
+
+<span class="fc" id="L283">        List&lt;SlottingRecommendationResponse&gt; response = recommendations.values().stream()</span>
+<span class="fc" id="L284">            .map(rec -&gt; new SlottingRecommendationResponse(</span>
+<span class="fc" id="L285">                rec.locationId(),</span>
+<span class="fc" id="L286">                rec.currentClass(),</span>
+<span class="fc" id="L287">                rec.recommendedClass(),</span>
+<span class="fc" id="L288">                rec.confidenceScore(),</span>
+<span class="fc" id="L289">                rec.reasoning()</span>
+            ))
+<span class="fc" id="L291">            .collect(Collectors.toList());</span>
+
+<span class="fc" id="L293">        return ResponseEntity.ok(response);</span>
+    }
+
+    /**
+     * Optimize zone slotting
+     */
+    @PostMapping(&quot;/slotting/optimize&quot;)
+    @Operation(summary = &quot;Optimize slotting&quot;, description = &quot;Optimize slotting for a warehouse zone&quot;)
+    public ResponseEntity&lt;SlottingOptimizationResponse&gt; optimizeSlotting(
+            @RequestParam String warehouseId,
+            @RequestParam String zone,
+            @RequestHeader(value = &quot;X-User-Id&quot;, required = false, defaultValue = &quot;system&quot;) String userId
+    ) {
+<span class="fc" id="L306">        int updated = slottingService.optimizeZoneSlotting(warehouseId, zone, userId);</span>
+<span class="fc" id="L307">        return ResponseEntity.ok(new SlottingOptimizationResponse(</span>
+            warehouseId,
+            zone,
+            updated,
+            &quot;Slotting optimization completed successfully&quot;
+        ));
+    }
+
+    /**
+     * Get golden zone locations
+     */
+    @GetMapping(&quot;/golden-zone&quot;)
+    @Operation(summary = &quot;Get golden zone&quot;, description = &quot;Get optimal golden zone locations&quot;)
+    public ResponseEntity&lt;List&lt;LocationResponse&gt;&gt; getGoldenZone(
+            @RequestParam String warehouseId,
+            @RequestParam String zone
+    ) {
+<span class="fc" id="L324">        List&lt;LocationMaster&gt; goldenZone = slottingService.identifyGoldenZone(warehouseId, zone);</span>
+<span class="fc" id="L325">        return ResponseEntity.ok(</span>
+<span class="fc" id="L326">            goldenZone.stream()</span>
+<span class="fc" id="L327">                .map(LocationResponse::from)</span>
+<span class="fc" id="L328">                .collect(Collectors.toList())</span>
+        );
+    }
+
+    /**
+     * Get locations requiring attention
+     */
+    @GetMapping(&quot;/attention-required&quot;)
+    @Operation(summary = &quot;Get locations requiring attention&quot;, description = &quot;Get blocked or full locations&quot;)
+    public ResponseEntity&lt;List&lt;LocationResponse&gt;&gt; getLocationsRequiringAttention(
+            @RequestParam String warehouseId
+    ) {
+<span class="fc" id="L340">        List&lt;LocationMaster&gt; locations = configService.getLocationsRequiringAttention(warehouseId);</span>
+<span class="fc" id="L341">        return ResponseEntity.ok(</span>
+<span class="fc" id="L342">            locations.stream()</span>
+<span class="fc" id="L343">                .map(LocationResponse::from)</span>
+<span class="fc" id="L344">                .collect(Collectors.toList())</span>
+        );
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

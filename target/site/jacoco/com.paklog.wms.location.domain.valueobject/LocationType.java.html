@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LocationType.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">location-master-service</a> &gt; <a href="index.source.html" class="el_package">com.paklog.wms.location.domain.valueobject</a> &gt; <span class="el_source">LocationType.java</span></div><h1>LocationType.java</h1><pre class="source lang-java linenums">package com.paklog.wms.location.domain.valueobject;
+
+/**
+ * Location Type - Defines the type of location in the warehouse hierarchy
+ */
+<span class="fc" id="L6">public enum LocationType {</span>
+<span class="fc" id="L7">    WAREHOUSE(&quot;Warehouse facility&quot;),</span>
+<span class="fc" id="L8">    ZONE(&quot;Functional zone within warehouse&quot;),</span>
+<span class="fc" id="L9">    AISLE(&quot;Storage aisle&quot;),</span>
+<span class="fc" id="L10">    BAY(&quot;Storage bay within aisle&quot;),</span>
+<span class="fc" id="L11">    LEVEL(&quot;Storage level/shelf&quot;),</span>
+<span class="fc" id="L12">    BIN(&quot;Individual storage bin/position&quot;),</span>
+<span class="fc" id="L13">    DOOR(&quot;Shipping/receiving door&quot;),</span>
+<span class="fc" id="L14">    STAGING(&quot;Staging area&quot;),</span>
+<span class="fc" id="L15">    WORK_STATION(&quot;Work station/put wall&quot;);</span>
+
+    private final String description;
+
+<span class="fc" id="L19">    LocationType(String description) {</span>
+<span class="fc" id="L20">        this.description = description;</span>
+<span class="fc" id="L21">    }</span>
+
+    public String getDescription() {
+<span class="nc" id="L24">        return description;</span>
+    }
+
+    /**
+     * Check if this location type can contain other locations
+     */
+    public boolean canHaveChildren() {
+<span class="fc bfc" id="L31" title="All 2 branches covered.">        return switch (this) {</span>
+<span class="fc" id="L32">            case WAREHOUSE, ZONE, AISLE, BAY, LEVEL -&gt; true;</span>
+<span class="fc" id="L33">            case BIN, DOOR, STAGING, WORK_STATION -&gt; false;</span>
+        };
+    }
+
+    /**
+     * Check if this location type can store inventory
+     */
+    public boolean canStoreInventory() {
+<span class="fc bfc" id="L41" title="All 2 branches covered.">        return switch (this) {</span>
+<span class="fc" id="L42">            case BIN, STAGING -&gt; true;</span>
+<span class="fc" id="L43">            case WAREHOUSE, ZONE, AISLE, BAY, LEVEL, DOOR, WORK_STATION -&gt; false;</span>
+        };
+    }
+
+    /**
+     * Get typical parent location type
+     */
+    public LocationType getTypicalParent() {
+<span class="pc bpc" id="L51" title="8 of 9 branches missed.">        return switch (this) {</span>
+<span class="nc" id="L52">            case WAREHOUSE -&gt; null;</span>
+<span class="nc" id="L53">            case ZONE -&gt; WAREHOUSE;</span>
+<span class="fc" id="L54">            case AISLE -&gt; ZONE;</span>
+<span class="nc" id="L55">            case BAY -&gt; AISLE;</span>
+<span class="nc" id="L56">            case LEVEL -&gt; BAY;</span>
+<span class="nc" id="L57">            case BIN -&gt; LEVEL;</span>
+<span class="nc" id="L58">            case DOOR -&gt; WAREHOUSE;</span>
+<span class="nc" id="L59">            case STAGING -&gt; ZONE;</span>
+<span class="nc" id="L60">            case WORK_STATION -&gt; ZONE;</span>
+        };
+    }
+
+    /**
+     * Get hierarchy depth (0 = root)
+     */
+    public int getHierarchyDepth() {
+<span class="pc bpc" id="L68" title="2 of 6 branches missed.">        return switch (this) {</span>
+<span class="fc" id="L69">            case WAREHOUSE -&gt; 0;</span>
+<span class="fc" id="L70">            case ZONE, DOOR -&gt; 1;</span>
+<span class="fc" id="L71">            case AISLE, STAGING, WORK_STATION -&gt; 2;</span>
+<span class="nc" id="L72">            case BAY -&gt; 3;</span>
+<span class="nc" id="L73">            case LEVEL -&gt; 4;</span>
+<span class="fc" id="L74">            case BIN -&gt; 5;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

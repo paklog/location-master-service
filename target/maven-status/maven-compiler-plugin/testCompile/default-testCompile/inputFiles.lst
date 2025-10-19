@@ -1,0 +1,13 @@
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/support/TestDataFactory.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/repository/LocationMasterRepositoryIntegrationTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/application/service/SlottingServiceTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/entity/DimensionsTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/valueobject/LocationTypeTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/entity/CapacityTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/infrastructure/events/LocationEventPublisherTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/entity/RestrictionsTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/adapter/rest/LocationControllerTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/valueobject/LocationStatusTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/aggregate/LocationMasterTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/application/service/LocationConfigurationServiceTest.java
+/Users/claudioed/development/github/paklog/location-master-service/src/test/java/com/paklog/wms/location/domain/valueobject/SlottingClassTest.java
