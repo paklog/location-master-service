@@ -57,7 +57,7 @@ location:
 # CloudEvents Configuration
 cloudevents:
   kafka:
-    topic: wms-location-events
+    topic: physical-operations.location-master.events
     source: /wms/location-master-service
 
 # Actuator Endpoints

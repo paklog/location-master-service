@@ -428,6 +428,8 @@ public class LocationConfigurationService {
                 updatedBy
             );
             eventPublisher.publishLocationStatusChanged(event);
-        }
-    }
+        
+
+}
+}
 }
