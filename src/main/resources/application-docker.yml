@@ -1,0 +1,20 @@
+spring:
+  # Docker-specific overrides
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+# Logging Configuration for Docker
+logging:
+  level:
+    root: INFO
+    com.paklog.wms.location: INFO
+    org.springframework.kafka: WARN
+    org.hibernate.SQL: WARN
+
+# Actuator for Docker environment
+management:
+  metrics:
+    tags:
+      environment: docker

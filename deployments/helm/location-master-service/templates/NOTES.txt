@@ -1,0 +1,68 @@
+================================================================================
+  Location Master Service - Successfully Deployed!
+================================================================================
+
+Your location-master-service has been deployed to Kubernetes.
+
+1. Get the application URL:
+
+{{- if .Values.gateway.enabled }}
+
+   The application is accessible via Gateway API HTTPRoute:
+
+   {{- range .Values.gateway.hostnames }}
+   - http://{{ . }}/api/v1/locations
+   {{- end }}
+
+   Add the following to your /etc/hosts for local testing:
+   {{- range .Values.gateway.hostnames }}
+   <GATEWAY-IP>  {{ . }}
+   {{- end }}
+
+{{- else }}
+
+   To access the service directly:
+
+   kubectl port-forward svc/{{ include "location-master-service.fullname" . }} 8080:{{ .Values.service.port }}
+
+   Then visit http://localhost:8080/api/v1/locations
+
+{{- end }}
+
+2. Endpoints:
+
+   - Health Check:     /actuator/health
+   - Metrics:          /actuator/metrics
+   - Prometheus:       /actuator/prometheus
+   - API Docs:         /swagger-ui.html
+   - OpenAPI Spec:     /api-docs
+
+3. Check deployment status:
+
+   kubectl get pods -l "app.kubernetes.io/name={{ include "location-master-service.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+
+4. View logs:
+
+   kubectl logs -l "app.kubernetes.io/name={{ include "location-master-service.name" . }}" -f
+
+5. Service details:
+
+   - Replicas: {{ .Values.replicaCount }}
+   {{- if .Values.autoscaling.enabled }}
+   - Autoscaling: Enabled ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas)
+   {{- end }}
+   - Image: {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+   - Database: {{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}
+   - Kafka: {{ .Values.kafka.bootstrapServers }}
+
+{{- if .Values.serviceMonitor.enabled }}
+
+6. Prometheus metrics:
+
+   ServiceMonitor created. Prometheus will automatically scrape metrics.
+
+{{- end }}
+
+================================================================================
+For more information, visit: https://github.com/paklog/location-master-service
+================================================================================

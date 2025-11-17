@@ -1,0 +1,19 @@
+apiVersion: v2
+name: location-master-service
+description: Helm chart for Location Master Service - WMS microservice for warehouse location hierarchy management
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+keywords:
+  - wms
+  - warehouse
+  - location
+  - microservice
+  - spring-boot
+  - native
+home: https://github.com/paklog/location-master-service
+sources:
+  - https://github.com/paklog/location-master-service
+maintainers:
+  - name: Paklog Team
+    email: dev@paklog.com

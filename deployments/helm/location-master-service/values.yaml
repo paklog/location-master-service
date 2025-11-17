@@ -1,0 +1,209 @@
+# Default values for location-master-service
+
+replicaCount: 3
+
+image:
+  repository: location-master-service
+  pullPolicy: IfNotPresent
+  tag: "native"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/actuator/prometheus"
+  prometheus.io/port: "8080"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1001
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+# Gateway API configuration
+gateway:
+  enabled: true
+  gatewayClassName: "default"
+  gatewayName: "wms-gateway"
+  gatewayNamespace: "default"
+  hostnames:
+    - "location-master.paklog.local"
+  parentRefs:
+    - name: "wms-gateway"
+      namespace: "default"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v1/locations
+      backendRefs:
+        - name: location-master-service
+          port: 8080
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+startupProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 0
+  periodSeconds: 5
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 30
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - location-master-service
+          topologyKey: kubernetes.io/hostname
+
+# Application configuration
+config:
+  spring:
+    profiles:
+      active: "kubernetes"
+  location:
+    slotting:
+      enabled: true
+      autoOptimize: false
+    hierarchy:
+      maxDepth: 6
+
+# Database configuration
+database:
+  host: "postgres-service"
+  port: 5432
+  name: "locationdb"
+  username: "postgres"
+  existingSecret: "location-master-db-secret"
+  secretKey: "password"
+
+# Kafka configuration
+kafka:
+  bootstrapServers: "kafka-service:9092"
+  topic: "physical-operations.location-master.events"
+  consumerGroup: "location-master-group"
+
+# Observability configuration
+observability:
+  prometheus:
+    enabled: true
+  tracing:
+    enabled: true
+    endpoint: "http://tempo:4318/v1/traces"
+    samplingProbability: 1.0
+  loki:
+    enabled: false
+    endpoint: "http://loki:3100/loki/api/v1/push"
+
+# ServiceMonitor for Prometheus Operator
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+  annotations: {}
+
+# Volume mounts for writable directories (native image needs tmp)
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+  - name: logs
+    mountPath: /app/logs
+
+volumes:
+  - name: tmp
+    emptyDir: {}
+  - name: logs
+    emptyDir: {}
+
+# Environment variables
+env:
+  - name: JAVA_OPTS
+    value: "-XX:MaxRAMPercentage=75.0"
+  - name: SPRING_PROFILES_ACTIVE
+    value: "kubernetes"
+  - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+    value: "health,info,metrics,prometheus"
+
+# Additional environment variables from ConfigMap
+envFrom:
+  - configMapRef:
+      name: location-master-config
+  - secretRef:
+      name: location-master-secret

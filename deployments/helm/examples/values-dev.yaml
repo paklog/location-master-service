@@ -1,0 +1,67 @@
+# Example values for development environment
+# Usage: helm install location-master ./deployments/helm/location-master-service -f deployments/helm/examples/values-dev.yaml
+
+replicaCount: 1
+
+image:
+  repository: location-master-service
+  pullPolicy: IfNotPresent
+  tag: "native"
+
+# Disable autoscaling for dev
+autoscaling:
+  enabled: false
+
+# Reduced resources for dev
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# Database configuration for dev
+database:
+  host: "postgres-service"
+  port: 5432
+  name: "locationdb_dev"
+  username: "postgres"
+
+# Kafka configuration for dev
+kafka:
+  bootstrapServers: "kafka-service:9092"
+  topic: "dev.location-master.events"
+  consumerGroup: "location-master-dev-group"
+
+# Gateway configuration for dev
+gateway:
+  enabled: true
+  gatewayName: "wms-gateway"
+  gatewayNamespace: "default"
+  hostnames:
+    - "location-master.dev.local"
+
+# Enable verbose logging for dev
+config:
+  spring:
+    profiles:
+      active: "kubernetes,dev"
+
+# Observability - full sampling for dev
+observability:
+  prometheus:
+    enabled: true
+  tracing:
+    enabled: true
+    endpoint: "http://tempo:4318/v1/traces"
+    samplingProbability: 1.0
+
+# ServiceMonitor for dev
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+# Disable PDB for dev (single replica)
+podDisruptionBudget:
+  enabled: false

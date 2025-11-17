@@ -1,0 +1,122 @@
+# Example values for production environment
+# Usage: helm install location-master ./deployments/helm/location-master-service -f deployments/helm/examples/values-prod.yaml
+
+replicaCount: 5
+
+image:
+  repository: my-registry.example.com/location-master-service
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"
+
+imagePullSecrets:
+  - name: registry-credentials
+
+# Enable autoscaling for production
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Production resources
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Database configuration for production
+database:
+  host: "prod-postgres.example.com"
+  port: 5432
+  name: "locationdb"
+  username: "location_svc"
+  existingSecret: "location-master-db-secret-prod"
+  secretKey: "password"
+
+# Kafka configuration for production
+kafka:
+  bootstrapServers: "prod-kafka-1.example.com:9092,prod-kafka-2.example.com:9092,prod-kafka-3.example.com:9092"
+  topic: "physical-operations.location-master.events"
+  consumerGroup: "location-master-prod-group"
+
+# Gateway configuration for production
+gateway:
+  enabled: true
+  gatewayName: "wms-gateway"
+  gatewayNamespace: "default"
+  hostnames:
+    - "location.prod.example.com"
+    - "location-api.example.com"
+
+# Application configuration for production
+config:
+  spring:
+    profiles:
+      active: "kubernetes,prod"
+  location:
+    slotting:
+      enabled: true
+      autoOptimize: true
+    hierarchy:
+      maxDepth: 6
+
+# Observability - reduced sampling for production
+observability:
+  prometheus:
+    enabled: true
+  tracing:
+    enabled: true
+    endpoint: "http://tempo-distributor:4318/v1/traces"
+    samplingProbability: 0.1
+  loki:
+    enabled: true
+    endpoint: "http://loki-gateway:3100/loki/api/v1/push"
+
+# ServiceMonitor for production
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    prometheus: kube-prometheus
+
+# Pod Disruption Budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Node selection for production workloads
+nodeSelector:
+  workload-type: application
+
+# Tolerations for dedicated nodes
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "application"
+    effect: "NoSchedule"
+
+# Enhanced affinity rules
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - location-master-service
+        topologyKey: kubernetes.io/hostname
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: node-role.kubernetes.io/application
+              operator: In
+              values:
+                - "true"

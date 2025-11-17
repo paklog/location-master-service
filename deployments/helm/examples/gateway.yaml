@@ -1,0 +1,59 @@
+# Example Gateway API Gateway resource
+# This creates the main gateway that HTTPRoutes will attach to
+#
+# Prerequisites:
+# 1. Install Gateway API CRDs:
+#    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+#
+# 2. Install a Gateway Controller (choose one):
+#    - Envoy Gateway: https://gateway.envoyproxy.io/
+#    - Istio: https://istio.io/latest/docs/tasks/traffic-management/ingress/gateway-api/
+#    - Kong: https://docs.konghq.com/kubernetes-ingress-controller/
+#    - Contour: https://projectcontour.io/docs/main/config/gateway-api/
+#
+# Apply this file:
+#    kubectl apply -f gateway.yaml
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: default
+spec:
+  controllerName: example.com/gateway-controller
+  # Change this to match your Gateway controller:
+  # - gateway.envoyproxy.io/gatewayclass-controller (Envoy Gateway)
+  # - istio.io/gateway-controller (Istio)
+  # - konghq.com/gateway-controller (Kong)
+  # - projectcontour.io/gateway-controller (Contour)
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: wms-gateway
+  namespace: default
+spec:
+  gatewayClassName: default
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: All
+      kinds:
+      - kind: HTTPRoute
+  # Uncomment for HTTPS support
+  # - name: https
+  #   protocol: HTTPS
+  #   port: 443
+  #   tls:
+  #     mode: Terminate
+  #     certificateRefs:
+  #     - name: wms-tls-cert
+  #   allowedRoutes:
+  #     namespaces:
+  #       from: All
+  #     kinds:
+  #     - kind: HTTPRoute
